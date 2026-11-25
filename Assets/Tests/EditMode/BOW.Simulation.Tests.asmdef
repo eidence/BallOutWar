@@ -5,6 +5,7 @@
         "BOW.Simulation",
         "BOW.AI",
         "BOW.Net",
+        "BOW.Meta",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

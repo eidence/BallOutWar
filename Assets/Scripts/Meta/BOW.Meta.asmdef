@@ -1,0 +1,16 @@
+{
+    "name": "BOW.Meta",
+    "rootNamespace": "BOW.Meta",
+    "references": [
+        "BOW.Simulation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

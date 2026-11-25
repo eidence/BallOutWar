@@ -20,7 +20,7 @@ namespace BOW.Game
         private static readonly Color ButtonBlue = MenuTheme.ButtonBlue;
         private static readonly Color ButtonGrey = MenuTheme.ButtonGrey;
 
-        private enum MenuScreen { Main, Setup, ExitConfirm, Lan, Settings }
+        private enum MenuScreen { Main, Setup, ExitConfirm, Lan, Settings, Store }
 
         private MatchLaunchConfig _config;
         private PortraitStudio _studio;
@@ -34,6 +34,9 @@ namespace BOW.Game
         private OptionRow _durationRow, _goalsRow, _tieRow;
         private LanMenu _lan;
         private SettingsMenu _settings;
+        private StoreMenu _store;
+        private MenuScreen _storeReturn = MenuScreen.Main;
+        private Text _lockNote;
 
         private void Awake()
         {
@@ -52,6 +55,8 @@ namespace BOW.Game
             BuildExitConfirm(canvas);
             _lan = new LanMenu(canvas, _studio.Portraits, () => Show(MenuScreen.Main));
             _settings = new SettingsMenu(canvas, () => Show(MenuScreen.Main));
+            _store = new StoreMenu(canvas, () => Show(_storeReturn));
+            EntitlementStore.Current.Changed += OnEntitlementsChanged;
             // Back from a LAN match, or a session that just ended: reopen Play Local.
             Show(NetSession.Active || NetSession.EndReason != null ? MenuScreen.Lan : MenuScreen.Main);
         }
@@ -69,10 +74,28 @@ namespace BOW.Game
                 case MenuScreen.ExitConfirm: Show(MenuScreen.Main); break;
                 case MenuScreen.Lan: _lan.Back(); break;
                 case MenuScreen.Settings: _settings.Close(); break;
+                case MenuScreen.Store: _store.Close(); break;
             }
         }
 
-        private void OnDestroy() => _lan?.Dispose();
+        private void OnDestroy()
+        {
+            _lan?.Dispose();
+            _store?.Dispose();
+            EntitlementStore.Current.Changed -= OnEntitlementsChanged;
+        }
+
+        private void OnEntitlementsChanged()
+        {
+            if (_screen == MenuScreen.Setup) RefreshSetup();
+        }
+
+        private void OpenStore(MenuScreen returnTo, string reason = null)
+        {
+            _storeReturn = returnTo;
+            Show(MenuScreen.Store);
+            if (reason != null) _store.Show(reason);
+        }
 
         private static bool BackPressed()
         {
@@ -92,6 +115,8 @@ namespace BOW.Game
             else if (_lan != null) _lan.Hide();
             if (screen == MenuScreen.Settings) _settings.Show();
             else _settings?.Hide();
+            if (screen == MenuScreen.Store) _store.Show();
+            else _store?.Hide();
             if (screen == MenuScreen.Setup) RefreshSetup();
         }
 
@@ -119,7 +144,7 @@ namespace BOW.Game
             Add("Practice", true, ButtonBlue, StartPractice);
             Add("Play Local", true, ButtonBlue, () => Show(MenuScreen.Lan));
             Add("Play Online  (soon)", false, ButtonGrey, () => { });
-            Add("Store  (soon)", false, ButtonGrey, () => { });
+            Add("Store", true, ButtonBlue, () => OpenStore(MenuScreen.Main));
             Add("Settings", true, ButtonBlue, () => Show(MenuScreen.Settings));
             Add("Exit", true, ButtonGrey, () => Show(MenuScreen.ExitConfirm));
         }
@@ -217,6 +242,10 @@ namespace BOW.Game
 
             UiFactory.Button(box, "Back", new Vector2(0f, 0f), new Vector2(240f, 80f), new Vector2(320f, 100f), ButtonGrey, () => Show(MenuScreen.Main));
             UiFactory.Button(box, "START", new Vector2(1f, 0f), new Vector2(-240f, 80f), new Vector2(360f, 110f), new Color(0.1f, 0.65f, 0.35f), StartSolo);
+            // Between Back and START, clear of the option rows.
+            _lockNote = UiFactory.Text(UiFactory.Rect("Lock note", box, new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-40f, 80f), new Vector2(620f, 110f)),
+                "", 26, new Color(1f, 0.8f, 0.5f));
+            _lockNote.horizontalOverflow = HorizontalWrapMode.Wrap;
 
             foreach (var row in _rows) row.Changed += RefreshSetup;
         }
@@ -232,6 +261,8 @@ namespace BOW.Game
             _durationRow.SetVisible(timed);
             _tieRow.SetVisible(timed);
             _goalsRow.SetVisible(!timed);
+            string note = EntitlementStore.SoloNote(_config.Mode);
+            _lockNote.text = note ?? "";
 
             bool[] active = _config.ActiveSeats();
             int[] characters = _config.CharactersBySeat();
@@ -245,6 +276,14 @@ namespace BOW.Game
 
         private void StartSolo()
         {
+            // Locked modes: one free try, then the store (US-8.9).
+            var status = EntitlementStore.Current.StatusFor(_config.Mode);
+            if (status == BOW.Meta.ModeStatus.Locked)
+            {
+                OpenStore(MenuScreen.Setup, "Elimination needs the Modes unlock.");
+                return;
+            }
+            if (status == BOW.Meta.ModeStatus.Trial) EntitlementStore.Current.UseTrial(_config.Mode);
             var profile = ProfileStore.Load();
             profile.LastMatch = _config.Clone();
             ProfileStore.Save();

@@ -342,7 +342,10 @@ namespace BOW.Game
             _ready.gameObject.SetActive(!isHost);
             if (isHost)
             {
-                string blocker = host.StartBlocker();
+                // Only the host needs the Modes unlock; guests play whatever the host owns (US-8.3).
+                string blocker = EntitlementStore.Current.CanHost(lobby.Settings.Mode)
+                    ? host.StartBlocker()
+                    : "Elimination needs the Modes unlock (see Store).";
                 _start.interactable = blocker == null;
                 _lobbyStatus.text = blocker ?? "Everyone's ready!";
             }

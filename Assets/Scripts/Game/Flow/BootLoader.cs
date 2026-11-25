@@ -16,6 +16,7 @@ namespace BOW.Game
         {
             SettingsStore.Load();
             ProfileStore.Load();
+            PurchaseService.Initialize(); // in the background; restores owned purchases (US-8.5)
             SceneManager.LoadScene(MenuScene);
         }
     }
