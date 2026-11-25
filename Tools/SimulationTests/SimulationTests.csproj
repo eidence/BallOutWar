@@ -17,7 +17,9 @@
   <ItemGroup>
     <Compile Include="../../Assets/Scripts/Simulation/**/*.cs" Exclude="../../Assets/Scripts/Simulation/AssemblyInfo.cs" />
     <Compile Include="../../Assets/Scripts/AI/**/*.cs" Exclude="../../Assets/Scripts/AI/AssemblyInfo.cs" />
+    <Compile Include="../../Assets/Scripts/Net/**/*.cs" Exclude="../../Assets/Scripts/Net/AssemblyInfo.cs" />
     <Compile Include="../../Assets/Tests/EditMode/AI/**/*.cs" />
+    <Compile Include="../../Assets/Tests/EditMode/Net/**/*.cs" />
     <Compile Include="../../Assets/Tests/EditMode/Simulation/**/*.cs" />
   </ItemGroup>
   <ItemGroup>

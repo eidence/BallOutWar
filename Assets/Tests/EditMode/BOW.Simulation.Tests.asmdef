@@ -4,6 +4,7 @@
     "references": [
         "BOW.Simulation",
         "BOW.AI",
+        "BOW.Net",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

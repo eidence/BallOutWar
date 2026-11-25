@@ -1,0 +1,17 @@
+{
+    "name": "BOW.Net",
+    "rootNamespace": "BOW.Net",
+    "references": [
+        "BOW.Simulation",
+        "BOW.AI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

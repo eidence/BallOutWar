@@ -24,30 +24,7 @@ namespace BOW.Simulation
                 if (!seat.IsActive) continue;
 
                 PlayerInput input = inputs != null && i < inputs.Length ? inputs[i] : default;
-
-                // Movement: analog stick or drag target, both capped at the same max speed.
-                float desired;
-                if (input.HasTarget)
-                {
-                    float target = SimMath.Clamp(SimMath.Sanitize(input.Target), -limit, limit);
-                    desired = SimMath.Clamp((target - seat.PaddlePosition) * cfg.DragGain, -cfg.PaddleMaxSpeed, cfg.PaddleMaxSpeed);
-                }
-                else
-                {
-                    desired = SimMath.Clamp(SimMath.Sanitize(input.Move), -1f, 1f) * cfg.PaddleMaxSpeed;
-                }
-
-                bool speedingUp = Math.Abs(desired) > Math.Abs(seat.PaddleVelocity)
-                                  && (seat.PaddleVelocity == 0f || Math.Sign(desired) == Math.Sign(seat.PaddleVelocity));
-                float rate = speedingUp ? cfg.PaddleAcceleration : cfg.PaddleDeceleration;
-                seat.PaddleVelocity = SimMath.MoveTowards(seat.PaddleVelocity, desired, rate * dt);
-                seat.PaddlePosition += seat.PaddleVelocity * dt;
-
-                if (seat.PaddlePosition > limit) { seat.PaddlePosition = limit; seat.PaddleVelocity = Math.Min(0f, seat.PaddleVelocity); }
-                if (seat.PaddlePosition < -limit) { seat.PaddlePosition = -limit; seat.PaddleVelocity = Math.Max(0f, seat.PaddleVelocity); }
-
-                // Blast cooldown runs in Countdown and Playing.
-                if (seat.BlastCooldown > 0f) seat.BlastCooldown = Math.Max(0f, seat.BlastCooldown - dt);
+                Move(ref seat, input, cfg, limit, dt);
 
                 if (input.BlastPressed)
                 {
@@ -57,6 +34,37 @@ namespace BOW.Simulation
                         Blast(sim, i);
                 }
             }
+        }
+
+        /// <summary>
+        /// Moves one paddle for one tick and runs down its blast cooldown. Shared with guest-side prediction
+        /// (<see cref="PaddlePrediction"/>), so a predicted paddle moves exactly as the host's does.
+        /// </summary>
+        internal static void Move(ref SeatState seat, PlayerInput input, GameplayConfig cfg, float limit, float dt)
+        {
+            // Movement: analog stick or drag target, both capped at the same max speed.
+            float desired;
+            if (input.HasTarget)
+            {
+                float target = SimMath.Clamp(SimMath.Sanitize(input.Target), -limit, limit);
+                desired = SimMath.Clamp((target - seat.PaddlePosition) * cfg.DragGain, -cfg.PaddleMaxSpeed, cfg.PaddleMaxSpeed);
+            }
+            else
+            {
+                desired = SimMath.Clamp(SimMath.Sanitize(input.Move), -1f, 1f) * cfg.PaddleMaxSpeed;
+            }
+
+            bool speedingUp = Math.Abs(desired) > Math.Abs(seat.PaddleVelocity)
+                              && (seat.PaddleVelocity == 0f || Math.Sign(desired) == Math.Sign(seat.PaddleVelocity));
+            float rate = speedingUp ? cfg.PaddleAcceleration : cfg.PaddleDeceleration;
+            seat.PaddleVelocity = SimMath.MoveTowards(seat.PaddleVelocity, desired, rate * dt);
+            seat.PaddlePosition += seat.PaddleVelocity * dt;
+
+            if (seat.PaddlePosition > limit) { seat.PaddlePosition = limit; seat.PaddleVelocity = Math.Min(0f, seat.PaddleVelocity); }
+            if (seat.PaddlePosition < -limit) { seat.PaddlePosition = -limit; seat.PaddleVelocity = Math.Max(0f, seat.PaddleVelocity); }
+
+            // Blast cooldown runs in Countdown and Playing.
+            if (seat.BlastCooldown > 0f) seat.BlastCooldown = Math.Max(0f, seat.BlastCooldown - dt);
         }
 
         private static void Blast(MatchSimulation sim, int seatIndex)
