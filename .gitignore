@@ -56,3 +56,8 @@ sysinfo.txt
 # OS files
 .DS_Store
 Thumbs.db
+
+# .NET test harness for the simulation (keep the project file, ignore build output)
+!/Tools/**/*.csproj
+/Tools/**/bin/
+/Tools/**/obj/
