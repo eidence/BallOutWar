@@ -36,6 +36,37 @@ namespace BOW.Simulation.Tests.Net
         }
 
         [Test]
+        public void SavedState_ResumesExactlyWhereItLeftOff()
+        {
+            // Offline resume (TDD 9.4) saves with the snapshot codec and reloads into a fresh simulation.
+            var original = SimTestUtil.Create(mode: GameMode.Elimination, balls: 2, configure: s => { s.Seed = 1234; s.GoalsToEliminate = 5; });
+            var inputs = new PlayerInput[4];
+            PlayerInput[] InputsAt(int t)
+            {
+                for (int i = 0; i < 4; i++) inputs[i] = PlayerInput.Analog((float)Math.Sin(t * 0.03 + i * 1.7), t % 89 == i * 7);
+                return inputs;
+            }
+            int tick = 0;
+            for (; tick < 1500; tick++) original.Step(InputsAt(tick));
+
+            var w = new PacketWriter();
+            Codecs.WriteSnapshot(w, original.State, null, 0);
+            var resumed = SimTestUtil.Create(mode: GameMode.Elimination, balls: 2, configure: s => { s.Seed = 1234; s.GoalsToEliminate = 5; });
+            var state = resumed.State.Clone();
+            var r = new PacketReader(w.Buffer, w.Length);
+            r.Header(out _, out _);
+            Codecs.ReadSnapshot(r, state, null);
+            resumed.LoadState(state);
+
+            for (; tick < 4000; tick++)
+            {
+                original.Step(InputsAt(tick));
+                resumed.Step(InputsAt(tick));
+            }
+            Assert.That(resumed.State.ContentEquals(original.State), Is.True);
+        }
+
+        [Test]
         public void Inputs_AreClampedAndBadNumbersRejected()
         {
             var w = new PacketWriter();

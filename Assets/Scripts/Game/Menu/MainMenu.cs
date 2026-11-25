@@ -20,7 +20,7 @@ namespace BOW.Game
         private static readonly Color ButtonBlue = MenuTheme.ButtonBlue;
         private static readonly Color ButtonGrey = MenuTheme.ButtonGrey;
 
-        private enum MenuScreen { Main, Setup, ExitConfirm, Lan, Settings, Store }
+        private enum MenuScreen { Main, Setup, ExitConfirm, Lan, Settings, Store, Resume }
 
         private MatchLaunchConfig _config;
         private PortraitStudio _studio;
@@ -37,6 +37,9 @@ namespace BOW.Game
         private StoreMenu _store;
         private MenuScreen _storeReturn = MenuScreen.Main;
         private Text _lockNote;
+        private RectTransform _resumePanel;
+        private Text _resumeDetails;
+        private ResumeStore.SavedMatch _saved;
 
         private void Awake()
         {
@@ -58,7 +61,9 @@ namespace BOW.Game
             _store = new StoreMenu(canvas, () => Show(_storeReturn));
             EntitlementStore.Current.Changed += OnEntitlementsChanged;
             // Back from a LAN match, or a session that just ended: reopen Play Local.
-            Show(NetSession.Active || NetSession.EndReason != null ? MenuScreen.Lan : MenuScreen.Main);
+            BuildResume(canvas);
+            _saved = NetSession.Active ? null : ResumeStore.Load();
+            Show(NetSession.Active || NetSession.EndReason != null ? MenuScreen.Lan : _saved != null ? MenuScreen.Resume : MenuScreen.Main);
         }
 
         private void Update()
@@ -75,6 +80,7 @@ namespace BOW.Game
                 case MenuScreen.Lan: _lan.Back(); break;
                 case MenuScreen.Settings: _settings.Close(); break;
                 case MenuScreen.Store: _store.Close(); break;
+                case MenuScreen.Resume: Show(MenuScreen.Main); break; // keep the save; it is offered again next launch
             }
         }
 
@@ -117,6 +123,8 @@ namespace BOW.Game
             else _settings?.Hide();
             if (screen == MenuScreen.Store) _store.Show();
             else _store?.Hide();
+            if (_resumePanel != null) _resumePanel.gameObject.SetActive(screen == MenuScreen.Resume);
+            if (screen == MenuScreen.Resume) RefreshResume();
             if (screen == MenuScreen.Setup) RefreshSetup();
         }
 
@@ -159,6 +167,48 @@ namespace BOW.Game
                 "Exit Ball Out War?", 64, Color.white);
             UiFactory.Button(box, "Exit", new Vector2(0.5f, 0f), new Vector2(-180f, 110f), new Vector2(320f, 100f), new Color(0.7f, 0.2f, 0.2f), ExitGame);
             UiFactory.Button(box, "Cancel", new Vector2(0.5f, 0f), new Vector2(180f, 110f), new Vector2(320f, 100f), ButtonGrey, () => Show(MenuScreen.Main));
+        }
+
+        // ----- Offline resume (TDD 9.4, US-6.6) -----
+
+        private void BuildResume(Transform canvas)
+        {
+            _resumePanel = UiFactory.Stretch("Resume", canvas);
+            UiFactory.Image(_resumePanel, new Color(0f, 0f, 0f, 0.6f));
+            var box = UiFactory.Rect("Box", _resumePanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1000f, 480f));
+            UiFactory.Image(box, Panel);
+            UiFactory.Text(UiFactory.Rect("Question", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(940f, 90f)),
+                "Resume your match?", 64, Cyan);
+            _resumeDetails = UiFactory.Text(UiFactory.Rect("Details", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -150f), new Vector2(940f, 120f)),
+                "", 34, Color.white);
+            UiFactory.Button(box, "Resume", new Vector2(0.5f, 0f), new Vector2(-200f, 100f), new Vector2(340f, 100f), MenuTheme.ButtonGreen, ResumeMatch);
+            UiFactory.Button(box, "Discard", new Vector2(0.5f, 0f), new Vector2(200f, 100f), new Vector2(340f, 100f), ButtonGrey, DiscardResume);
+            _resumePanel.gameObject.SetActive(false);
+        }
+
+        private void RefreshResume()
+        {
+            if (_saved == null) return;
+            var c = _saved.Config;
+            string mode = c.Mode == GameMode.Elimination ? "Elimination" : "Timed";
+            var age = System.DateTime.UtcNow - new System.DateTime(_saved.SavedAtUtcTicks, System.DateTimeKind.Utc);
+            string when = age.TotalMinutes < 1 ? "just now" : age.TotalHours < 1 ? $"{(int)age.TotalMinutes} min ago" : $"{(int)age.TotalHours} h ago";
+            _resumeDetails.text = $"{mode} as {Characters.Names[c.PlayerCharacter]} vs {c.Opponents} AI\nSaved {when}";
+        }
+
+        private void ResumeMatch()
+        {
+            if (_saved == null) { Show(MenuScreen.Main); return; }
+            ResumeStore.Pending = _saved;
+            MatchLaunch.Pending = _saved.Config.Clone();
+            SceneManager.LoadScene(BootLoader.MatchScene);
+        }
+
+        private void DiscardResume()
+        {
+            ResumeStore.Delete();
+            _saved = null;
+            Show(MenuScreen.Main);
         }
 
         private static void ExitGame()

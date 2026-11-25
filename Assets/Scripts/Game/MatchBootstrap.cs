@@ -58,6 +58,11 @@ namespace BOW.Game
         private float _accumulator;
         private int _screenWidth, _screenHeight;
         private int _lastCountdown;
+        private MatchLaunchConfig _launchConfig;   // offline matches started from the menu; null when played from the editor
+        private ResumeStore.SavedMatch _resume;
+        private uint _seed;
+        private float _saveTimer;
+        private bool _resumeCleared;
 
         private void Awake()
         {
@@ -102,6 +107,9 @@ namespace BOW.Game
             var config = MatchLaunch.Pending;
             if (config == null) return;
             MatchLaunch.Pending = null;
+            _launchConfig = config.Clone();
+            _resume = ResumeStore.Pending;
+            ResumeStore.Pending = null;
 
             mode = config.Mode;
             ballCount = config.BallCount;
@@ -147,10 +155,11 @@ namespace BOW.Game
                         DurationSeconds = durationSeconds,
                         GoalsToEliminate = goalsToEliminate,
                         TieRule = tieRule,
-                        Seed = (uint)Environment.TickCount,
+                        Seed = _seed = _resume != null ? _resume.Seed : (uint)Environment.TickCount,
                         SeatActive = BuildSeatList(),
                     };
                     _sim = new MatchSimulation(settings);
+                    RestoreIfResuming();
                     for (int i = 0; i < SeatFrame.SeatCount; i++)
                     {
                         var level = seatDifficulty != null && i < seatDifficulty.Length ? seatDifficulty[i] : AIDifficulty.Medium;
@@ -252,6 +261,7 @@ namespace BOW.Game
             _arena.Sync(_sim.State, Time.deltaTime);
             _actors.Sync(_previous, _sim.State, alpha, Time.deltaTime);
             _hud.Update(_sim.State, Time.deltaTime);
+            AutoSave(Time.deltaTime);
         }
 
         private void HandleEvents(IReadOnlyList<SimEvent> events)
@@ -335,7 +345,7 @@ namespace BOW.Game
         private void Restart()
         {
             if (_mode == Mode.Host) NetSession.Host.StartMatch(); // MatchStarted rebuilds the scene
-            else if (_mode == Mode.Offline) StartMatch();
+            else if (_mode == Mode.Offline) { ResumeStore.Delete(); StartMatch(); }
         }
 
         /// <summary>
@@ -354,6 +364,7 @@ namespace BOW.Game
                     NetSession.End();
                     break;
             }
+            if (_mode == Mode.Offline) ResumeStore.Delete();
             if (Application.CanStreamedLevelBeLoaded(BootLoader.MenuScene)) SceneManager.LoadScene(BootLoader.MenuScene);
             else if (_mode == Mode.Offline) StartMatch();
         }
@@ -364,7 +375,52 @@ namespace BOW.Game
             // US-6.1 / TDD 8.8: pause automatically when the app goes to the background.
             // A guest can't pause others by backgrounding, so it keeps going.
             if (_mode == Mode.Host) NetSession.Host?.Pause();
-            else if (_mode == Mode.Offline && _sim != null) _sim.Pause();
+            else if (_mode == Mode.Offline && _sim != null)
+            {
+                _sim.Pause();
+                SaveForResume();
+            }
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused && _mode == Mode.Offline) SaveForResume();
+        }
+
+        // ------------------------------------------------------------------ offline resume (TDD 9.4, US-6.6)
+
+        private bool CanResume => _mode == Mode.Offline && _launchConfig != null && _sim != null && _sim.Settings.Mode != GameMode.Practice;
+
+        /// <summary>Loads the saved state into the new simulation and leaves it paused, so the player resumes through a countdown.</summary>
+        private void RestoreIfResuming()
+        {
+            if (_resume == null) return;
+            var saved = _resume;
+            _resume = null; // a later restart starts fresh
+            var state = _sim.State.Clone();
+            if (!ResumeStore.TryRestore(saved, state)) { ResumeStore.Delete(); return; }
+            _sim.LoadState(state);
+            if (_sim.State.Phase == MatchPhase.Playing || _sim.State.Phase == MatchPhase.Countdown) _sim.Pause();
+        }
+
+        private void AutoSave(float deltaTime)
+        {
+            if (!CanResume) return;
+            if (_sim.IsEnded)
+            {
+                if (!_resumeCleared) { ResumeStore.Delete(); _resumeCleared = true; }
+                return;
+            }
+            _resumeCleared = false;
+            _saveTimer += deltaTime;
+            if (_saveTimer < 10f) return;
+            _saveTimer = 0f;
+            SaveForResume();
+        }
+
+        private void SaveForResume()
+        {
+            if (CanResume && !_sim.IsEnded) ResumeStore.Save(_launchConfig, _seed, _sim.State);
         }
 
         private void PlaceCamera()
