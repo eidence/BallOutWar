@@ -1,0 +1,44 @@
+{
+  "_comment": "Meshy jobs for Ball Out War. images: 1 = image-to-3d, 2-4 = multi-image-to-3d (first image is the front). Paths are relative to the repository root. options are passed to Meshy as-is (see Tools/Meshy/README.md).",
+  "defaults": {
+    "ai_model": "latest",
+    "should_remesh": true,
+    "topology": "triangle",
+    "should_texture": true,
+    "texture_resolution": "2k",
+    "target_formats": ["glb", "fbx"],
+    "origin_at": "bottom"
+  },
+  "jobs": [
+    {
+      "name": "bolt", "kind": "character", "rig": true,
+      "images": ["Docs/Concepts/views/bolt-front.png", "Docs/Concepts/views/bolt-side.png", "Docs/Concepts/views/bolt-back.png", "Docs/Concepts/views/bolt-three-quarter.png"],
+      "options": { "target_polycount": 8000, "pose_mode": "a-pose" }
+    },
+    {
+      "name": "mitzi", "kind": "character", "rig": true,
+      "images": ["Docs/Concepts/views/mitzi-front.png", "Docs/Concepts/views/mitzi-side.png", "Docs/Concepts/views/mitzi-back.png", "Docs/Concepts/views/mitzi-three-quarter.png"],
+      "options": { "target_polycount": 8000, "pose_mode": "a-pose" }
+    },
+    {
+      "name": "hopper", "kind": "character", "rig": true,
+      "images": ["Docs/Concepts/views/hopper-front.png", "Docs/Concepts/views/hopper-side.png", "Docs/Concepts/views/hopper-back.png", "Docs/Concepts/views/hopper-three-quarter.png"],
+      "options": { "target_polycount": 8000, "pose_mode": "a-pose" }
+    },
+    {
+      "name": "pip", "kind": "character", "rig": true,
+      "images": ["Docs/Concepts/views/pip-front.png", "Docs/Concepts/views/pip-side.png", "Docs/Concepts/views/pip-back.png", "Docs/Concepts/views/pip-three-quarter.png"],
+      "options": { "target_polycount": 8000, "pose_mode": "a-pose" }
+    },
+    {
+      "name": "bumper-car", "kind": "prop",
+      "images": ["Docs/Concepts/views/car-front.png", "Docs/Concepts/views/car-side.png", "Docs/Concepts/views/car-three-quarter.png", "Docs/Concepts/views/car-top.png"],
+      "options": { "target_polycount": 6000, "enable_pbr": true }
+    },
+    { "name": "corner-tower", "kind": "prop", "images": ["Docs/Concepts/views/corner-tower.png"], "options": { "target_polycount": 3000, "enable_pbr": true } },
+    { "name": "wall-section", "kind": "prop", "images": ["Docs/Concepts/views/wall-section.png"], "options": { "target_polycount": 2000, "enable_pbr": true } },
+    { "name": "goal-gate", "kind": "prop", "images": ["Docs/Concepts/views/goal-gate.png"], "options": { "target_polycount": 2000, "enable_pbr": true } },
+    { "name": "goal-pocket", "kind": "prop", "images": ["Docs/Concepts/views/goal-pocket.png"], "options": { "target_polycount": 3000, "enable_pbr": true } },
+    { "name": "launch-pad", "kind": "prop", "images": ["Docs/Concepts/views/launch-pad.png"], "options": { "target_polycount": 2000, "enable_pbr": true } }
+  ]
+}
