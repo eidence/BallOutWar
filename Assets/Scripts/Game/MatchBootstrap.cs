@@ -2,8 +2,7 @@ using System;
 using BOW.AI;
 using BOW.Simulation;
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Rendering.Universal;
+using UnityEngine.SceneManagement;
 using SimInput = BOW.Simulation.PlayerInput;
 
 namespace BOW.Game
@@ -54,7 +53,8 @@ namespace BOW.Game
             Application.targetFrameRate = 60;
             _camera = Camera.main;
             if (_camera == null) _camera = new GameObject("Main Camera") { tag = "MainCamera" }.AddComponent<Camera>();
-            SetUpEnvironment();
+            SceneLook.Apply(_camera);
+            ApplyLaunchConfig();
 
             _characters = new int[SeatFrame.SeatCount];
             for (int i = 0; i < _characters.Length; i++)
@@ -65,24 +65,32 @@ namespace BOW.Game
             StartMatch();
         }
 
-        private void SetUpEnvironment()
+        /// <summary>
+        /// Uses the setup chosen in the menu, if the match was started from there.
+        /// Playing the Match scene directly in the editor uses the Inspector values instead.
+        /// </summary>
+        private void ApplyLaunchConfig()
         {
-            _camera.clearFlags = CameraClearFlags.SolidColor;
-            _camera.backgroundColor = new Color(0.02f, 0.03f, 0.06f);
-            _camera.farClipPlane = 300f;
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.32f, 0.36f, 0.45f);
-            RenderSettings.fog = false;
+            var config = MatchLaunch.Pending;
+            if (config == null) return;
+            MatchLaunch.Pending = null;
 
-            // Bloom makes the neon glow. Use an instance of the scene profile so the asset is never modified.
-            var volume = FindFirstObjectByType<Volume>();
-            if (volume != null && volume.profile.TryGet(out Bloom bloom))
-            {
-                bloom.active = true;
-                bloom.threshold.Override(1.0f);
-                bloom.intensity.Override(1.1f);
-                bloom.scatter.Override(0.65f);
-            }
+            mode = config.Mode;
+            ballCount = config.BallCount;
+            durationSeconds = config.DurationSeconds;
+            goalsToEliminate = config.GoalsToEliminate;
+            tieRule = config.TieRule;
+            localSeat = MatchLaunchConfig.LocalSeat;
+            seatActive = config.ActiveSeats();
+            seatCharacter = config.CharactersBySeat();
+            seatDifficulty = new AIDifficulty[SeatFrame.SeatCount];
+            for (int i = 0; i < seatDifficulty.Length; i++) seatDifficulty[i] = config.DifficultyFor(i);
+        }
+
+        private void QuitToMenu()
+        {
+            if (Application.CanStreamedLevelBeLoaded(BootLoader.MenuScene)) SceneManager.LoadScene(BootLoader.MenuScene);
+            else StartMatch();
         }
 
         private void StartMatch()
@@ -118,6 +126,7 @@ namespace BOW.Game
             _hud = new MatchHud(_sim, localSeat, _characters, _studio.Portraits);
             _hud.PauseClicked += TogglePause;
             _hud.RestartClicked += StartMatch;
+            _hud.QuitClicked += QuitToMenu;
             _hud.BlastPressed += _local.PressBlast;
 
             PlaceCamera();
