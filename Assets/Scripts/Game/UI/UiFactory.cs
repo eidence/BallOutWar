@@ -99,6 +99,40 @@ namespace BOW.Game
         }
     }
 
+    public static class UiInput
+    {
+        /// <summary>A single-line text box (opens the on-screen keyboard on phones).</summary>
+        public static InputField Create(Transform parent, Vector2 anchor, Vector2 position, Vector2 size, string placeholder, string value,
+            InputField.ContentType type = InputField.ContentType.Standard, int maxLength = 32)
+        {
+            var rt = UiFactory.Rect("Input", parent, anchor, new Vector2(0.5f, 0.5f), position, size);
+            var background = UiFactory.Image(rt, new Color(0.1f, 0.12f, 0.17f, 0.95f));
+            var input = rt.gameObject.AddComponent<InputField>();
+            input.targetGraphic = background;
+
+            int fontSize = Mathf.RoundToInt(size.y * 0.45f);
+            var textRect = UiFactory.Stretch("Text", rt);
+            textRect.offsetMin = new Vector2(18f, 0f);
+            textRect.offsetMax = new Vector2(-18f, 0f);
+            var text = UiFactory.Text(textRect, "", fontSize, Color.white, TextAnchor.MiddleLeft, outline: false);
+            text.supportRichText = false;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            var placeholderRect = UiFactory.Stretch("Placeholder", rt);
+            placeholderRect.offsetMin = textRect.offsetMin;
+            placeholderRect.offsetMax = textRect.offsetMax;
+            var hint = UiFactory.Text(placeholderRect, placeholder, fontSize, new Color(1f, 1f, 1f, 0.35f), TextAnchor.MiddleLeft, outline: false);
+            hint.fontStyle = FontStyle.Italic;
+
+            input.textComponent = text;
+            input.placeholder = hint;
+            input.contentType = type;
+            input.characterLimit = maxLength;
+            input.text = value ?? "";
+            return input;
+        }
+    }
+
     /// <summary>Fires on touch-down rather than release, so a blast is never late (US-2.3).</summary>
     public sealed class PressButton : MonoBehaviour, IPointerDownHandler
     {

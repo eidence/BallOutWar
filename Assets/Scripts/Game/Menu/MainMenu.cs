@@ -15,12 +15,12 @@ namespace BOW.Game
     /// </summary>
     public sealed class MainMenu : MonoBehaviour
     {
-        private static readonly Color Cyan = new Color(0.25f, 0.95f, 1f);
-        private static readonly Color Panel = new Color(0.03f, 0.05f, 0.09f, 0.88f);
-        private static readonly Color ButtonBlue = new Color(0.08f, 0.45f, 0.65f);
-        private static readonly Color ButtonGrey = new Color(0.18f, 0.2f, 0.26f);
+        private static readonly Color Cyan = MenuTheme.Cyan;
+        private static readonly Color Panel = MenuTheme.Panel;
+        private static readonly Color ButtonBlue = MenuTheme.ButtonBlue;
+        private static readonly Color ButtonGrey = MenuTheme.ButtonGrey;
 
-        private enum MenuScreen { Main, Setup, ExitConfirm }
+        private enum MenuScreen { Main, Setup, ExitConfirm, Lan }
 
         private MatchLaunchConfig _config;
         private PortraitStudio _studio;
@@ -32,6 +32,7 @@ namespace BOW.Game
         private Text _characterName;
         private readonly OptionRow[] _opponentRows = new OptionRow[SeatFrame.SeatCount];
         private OptionRow _durationRow, _goalsRow, _tieRow;
+        private LanMenu _lan;
 
         private void Awake()
         {
@@ -48,12 +49,15 @@ namespace BOW.Game
             BuildMain(canvas);
             BuildSetup(canvas);
             BuildExitConfirm(canvas);
-            Show(MenuScreen.Main);
+            _lan = new LanMenu(canvas, _studio.Portraits, () => Show(MenuScreen.Main));
+            // Back from a LAN match, or a session that just ended: reopen Play Local.
+            Show(NetSession.Active || NetSession.EndReason != null ? MenuScreen.Lan : MenuScreen.Main);
         }
 
         private void Update()
         {
             _backdrop.Update(Time.deltaTime);
+            _lan.Update(Time.deltaTime);
             if (!BackPressed()) return;
             // Android back / Escape goes back one screen; from the main menu it asks before exiting (US-6.4).
             switch (_screen)
@@ -61,8 +65,11 @@ namespace BOW.Game
                 case MenuScreen.Setup: Show(MenuScreen.Main); break;
                 case MenuScreen.Main: Show(MenuScreen.ExitConfirm); break;
                 case MenuScreen.ExitConfirm: Show(MenuScreen.Main); break;
+                case MenuScreen.Lan: _lan.Back(); break;
             }
         }
+
+        private void OnDestroy() => _lan?.Dispose();
 
         private static bool BackPressed()
         {
@@ -78,6 +85,8 @@ namespace BOW.Game
             _main.gameObject.SetActive(screen == MenuScreen.Main);
             _setup.gameObject.SetActive(screen == MenuScreen.Setup);
             _exit.gameObject.SetActive(screen == MenuScreen.ExitConfirm);
+            if (screen == MenuScreen.Lan) _lan.Show();
+            else if (_lan != null) _lan.Hide();
             if (screen == MenuScreen.Setup) RefreshSetup();
         }
 
@@ -103,7 +112,7 @@ namespace BOW.Game
 
             Add("Play Solo", true, ButtonBlue, () => Show(MenuScreen.Setup));
             Add("Practice", true, ButtonBlue, StartPractice);
-            Add("Play Local  (soon)", false, ButtonGrey, () => { });
+            Add("Play Local", true, ButtonBlue, () => Show(MenuScreen.Lan));
             Add("Play Online  (soon)", false, ButtonGrey, () => { });
             Add("Store  (soon)", false, ButtonGrey, () => { });
             Add("Settings  (soon)", false, ButtonGrey, () => { });
@@ -256,31 +265,5 @@ namespace BOW.Game
             return options[(i + delta + options.Length) % options.Length];
         }
 
-        /// <summary>"Label   &lt;  value  &gt;" selector row.</summary>
-        private sealed class OptionRow
-        {
-            private readonly RectTransform _root;
-            private readonly Text _label;
-            private readonly Text _value;
-            private readonly Func<string> _get;
-
-            public event Action Changed;
-
-            public OptionRow(Transform parent, string label, float x, float y, Func<string> get, Action<int> step)
-            {
-                _get = get;
-                _root = UiFactory.Rect(label, parent, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, y), new Vector2(720f, 66f));
-                _label = UiFactory.Text(UiFactory.Rect("Label", _root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(330f, 60f)),
-                    label, 32, Color.white, TextAnchor.MiddleLeft);
-                UiFactory.Button(_root, "<", new Vector2(0f, 0.5f), new Vector2(370f, 0f), new Vector2(64f, 60f), ButtonGrey, () => { step(-1); Changed?.Invoke(); });
-                _value = UiFactory.Text(UiFactory.Rect("Value", _root, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(530f, 0f), new Vector2(240f, 60f)),
-                    "", 32, Cyan);
-                UiFactory.Button(_root, ">", new Vector2(0f, 0.5f), new Vector2(690f, 0f), new Vector2(64f, 60f), ButtonGrey, () => { step(1); Changed?.Invoke(); });
-            }
-
-            public void Refresh() => _value.text = _get();
-            public void SetLabel(string text) => _label.text = text;
-            public void SetVisible(bool visible) => _root.gameObject.SetActive(visible);
-        }
     }
 }

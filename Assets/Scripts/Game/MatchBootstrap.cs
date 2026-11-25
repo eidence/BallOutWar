@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using BOW.AI;
+using BOW.Net;
 using BOW.Simulation;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -8,13 +10,19 @@ using SimInput = BOW.Simulation.PlayerInput;
 namespace BOW.Game
 {
     /// <summary>
-    /// Match driver for the Match scene (prototype). Builds the arena, cars, drivers and HUD from the simulation,
-    /// steps the simulation at its fixed tick rate, and feeds it the local player's input and the AI opponents'.
-    /// The local player sits at <see cref="localSeat"/>; every other active seat is an AI.
-    /// The menus and lobby will set these fields later; for now edit them on the Match object in the Inspector.
+    /// Match driver for the Match scene. Builds the arena, cars, drivers and HUD from the simulation and runs the
+    /// match in one of three modes:
+    /// <list type="bullet">
+    /// <item>Offline: steps its own simulation, with AI in every other active seat.</item>
+    /// <item>LAN host: steps <see cref="NetHost"/>, which also feeds guests and AI seats.</item>
+    /// <item>LAN guest: shows <see cref="NetGuest"/>'s view of the host's match and sends local input.</item>
+    /// </list>
+    /// Playing the scene directly in the editor uses the Inspector values (offline).
     /// </summary>
     public sealed class MatchBootstrap : MonoBehaviour
     {
+        private enum Mode { Offline, Host, Guest }
+
         [Header("Match")]
         [SerializeField] private GameMode mode = GameMode.Timed;
         [SerializeField, Range(1, 4)] private int ballCount = 2;
@@ -33,11 +41,13 @@ namespace BOW.Game
         [SerializeField, Range(30f, 80f)] private float cameraPitch = 55f;
         [SerializeField, Range(20f, 60f)] private float cameraFieldOfView = 35f;
 
+        private Mode _mode;
         private MatchSimulation _sim;
         private MatchState _previous;
         private readonly SimInput[] _inputs = new SimInput[SeatFrame.SeatCount];
         private readonly AIController[] _ai = new AIController[SeatFrame.SeatCount];
         private readonly LocalPlayerInput _local = new LocalPlayerInput();
+        private readonly List<SimEvent> _events = new List<SimEvent>();
         private int[] _characters;
         private PortraitStudio _studio;
         private ArenaView _arena;
@@ -54,15 +64,32 @@ namespace BOW.Game
             _camera = Camera.main;
             if (_camera == null) _camera = new GameObject("Main Camera") { tag = "MainCamera" }.AddComponent<Camera>();
             SceneLook.Apply(_camera);
-            ApplyLaunchConfig();
 
-            _characters = new int[SeatFrame.SeatCount];
-            for (int i = 0; i < _characters.Length; i++)
-                _characters[i] = seatCharacter != null && i < seatCharacter.Length ? Mathf.Clamp(seatCharacter[i], 0, Characters.Count - 1) : i;
+            if (NetSession.Host != null && NetSession.Host.InMatch)
+            {
+                _mode = Mode.Host;
+                NetSession.Host.MatchStarted += StartMatch; // rematch
+            }
+            else if (NetSession.Guest != null && NetSession.Guest.Status == GuestStatus.InMatch)
+            {
+                _mode = Mode.Guest;
+                NetSession.Guest.MatchStarted += StartMatch;
+            }
+            else
+            {
+                _mode = Mode.Offline;
+                ApplyLaunchConfig();
+            }
 
             _studio = new PortraitStudio(transform);
             StartCoroutine(_studio.RenderOnce());
             StartMatch();
+        }
+
+        private void OnDestroy()
+        {
+            if (NetSession.Host != null) NetSession.Host.MatchStarted -= StartMatch;
+            if (NetSession.Guest != null) NetSession.Guest.MatchStarted -= StartMatch;
         }
 
         /// <summary>
@@ -87,46 +114,60 @@ namespace BOW.Game
             for (int i = 0; i < seatDifficulty.Length; i++) seatDifficulty[i] = config.DifficultyFor(i);
         }
 
-        private void QuitToMenu()
-        {
-            if (Application.CanStreamedLevelBeLoaded(BootLoader.MenuScene)) SceneManager.LoadScene(BootLoader.MenuScene);
-            else StartMatch();
-        }
-
         private void StartMatch()
         {
             if (_worldRoot != null) Destroy(_worldRoot.gameObject);
             _hud?.Destroy();
-
-            var settings = new MatchSettings
-            {
-                Mode = mode,
-                BallCount = ballCount,
-                DurationSeconds = durationSeconds,
-                GoalsToEliminate = goalsToEliminate,
-                TieRule = tieRule,
-                Seed = (uint)Environment.TickCount,
-                SeatActive = BuildSeatList(),
-            };
-
-            _sim = new MatchSimulation(settings);
-            _previous = _sim.State.Clone();
             _accumulator = 0f;
+            Array.Clear(_ai, 0, _ai.Length);
 
-            for (int i = 0; i < SeatFrame.SeatCount; i++)
+            switch (_mode)
             {
-                var level = seatDifficulty != null && i < seatDifficulty.Length ? seatDifficulty[i] : AIDifficulty.Medium;
-                _ai[i] = i != localSeat && settings.SeatActive[i] ? new AIController(i, level, settings.Seed * 7919u + (uint)i) : null;
+                case Mode.Host:
+                    _sim = NetSession.Host.Simulation;
+                    localSeat = NetHost.LocalSeat;
+                    _characters = NetSession.Host.Lobby.Characters();
+                    break;
+
+                case Mode.Guest:
+                    _sim = NetSession.Guest.Simulation;
+                    localSeat = NetSession.Guest.LocalSeat;
+                    _characters = NetSession.Guest.Characters;
+                    break;
+
+                default:
+                    _characters = new int[SeatFrame.SeatCount];
+                    for (int i = 0; i < _characters.Length; i++)
+                        _characters[i] = seatCharacter != null && i < seatCharacter.Length ? Mathf.Clamp(seatCharacter[i], 0, Characters.Count - 1) : i;
+                    var settings = new MatchSettings
+                    {
+                        Mode = mode,
+                        BallCount = ballCount,
+                        DurationSeconds = durationSeconds,
+                        GoalsToEliminate = goalsToEliminate,
+                        TieRule = tieRule,
+                        Seed = (uint)Environment.TickCount,
+                        SeatActive = BuildSeatList(),
+                    };
+                    _sim = new MatchSimulation(settings);
+                    for (int i = 0; i < SeatFrame.SeatCount; i++)
+                    {
+                        var level = seatDifficulty != null && i < seatDifficulty.Length ? seatDifficulty[i] : AIDifficulty.Medium;
+                        _ai[i] = i != localSeat && settings.SeatActive[i] ? new AIController(i, level, settings.Seed * 7919u + (uint)i) : null;
+                    }
+                    break;
             }
 
+            _previous = _sim.State.Clone();
             _worldRoot = new GameObject("Match World").transform;
             _arena = new ArenaView(_sim.Arena, _worldRoot, localSeat);
             _actors = new MatchActorsView(_sim, _worldRoot, _characters);
 
             _hud = new MatchHud(_sim, localSeat, _characters, _studio.Portraits);
+            _hud.ConfigureFor(_mode == Mode.Offline ? MatchHud.Role.Offline : _mode == Mode.Host ? MatchHud.Role.Host : MatchHud.Role.Guest);
             _hud.PauseClicked += TogglePause;
-            _hud.RestartClicked += StartMatch;
-            _hud.QuitClicked += QuitToMenu;
+            _hud.RestartClicked += Restart;
+            _hud.QuitClicked += Quit;
             _hud.BlastPressed += _local.PressBlast;
 
             PlaceCamera();
@@ -144,6 +185,9 @@ namespace BOW.Game
 
         private void Update()
         {
+            // The session ended under us (the host left); NetSession is already loading the menu.
+            if (_mode == Mode.Host && NetSession.Host == null || _mode == Mode.Guest && NetSession.Guest == null) return;
+
             if (Screen.width != _screenWidth || Screen.height != _screenHeight) PlaceCamera();
             if (LocalPlayerInput.PausePressed()) TogglePause();
 
@@ -151,31 +195,56 @@ namespace BOW.Game
 
             float dt = _sim.DeltaTime;
             _accumulator = Mathf.Min(_accumulator + Time.deltaTime, 0.25f);
-            while (_accumulator >= dt)
+            float alpha;
+            switch (_mode)
             {
-                _accumulator -= dt;
-                _previous.CopyFrom(_sim.State);
+                case Mode.Guest:
+                    var guest = NetSession.Guest;
+                    while (_accumulator >= dt)
+                    {
+                        _accumulator -= dt;
+                        if (guest.Tick(_local.Consume()))
+                        {
+                            float along = guest.Simulation.State.Seats[localSeat].PaddlePosition;
+                            _actors.PlayBlast(localSeat, SeatFrame.ToWorld(localSeat, _sim.Arena.HalfSize, along, _sim.Config.PaddleOffset));
+                        }
+                    }
+                    guest.GetDisplay(_previous, _sim.State, out alpha);
+                    HandleEvents(guest.TakeEvents());
+                    break;
 
-                for (int i = 0; i < SeatFrame.SeatCount; i++)
-                {
-                    if (i == localSeat) _inputs[i] = _local.Consume();
-                    else _inputs[i] = _ai[i] != null ? _ai[i].Think(_sim) : default;
-                }
-
-                _sim.Step(_inputs);
-                HandleEvents();
+                default:
+                    while (_accumulator >= dt)
+                    {
+                        _accumulator -= dt;
+                        _previous.CopyFrom(_sim.State);
+                        if (_mode == Mode.Host)
+                        {
+                            NetSession.Host.Step(_local.Consume(), dt);
+                        }
+                        else
+                        {
+                            for (int i = 0; i < SeatFrame.SeatCount; i++)
+                                _inputs[i] = i == localSeat ? _local.Consume() : _ai[i] != null ? _ai[i].Think(_sim) : default;
+                            _sim.Step(_inputs);
+                        }
+                        HandleEvents(_sim.Events);
+                    }
+                    bool moving = _sim.State.Phase == MatchPhase.Playing || _sim.State.Phase == MatchPhase.Countdown;
+                    alpha = moving ? _accumulator / dt : 1f;
+                    break;
             }
 
-            bool moving = _sim.State.Phase == MatchPhase.Playing || _sim.State.Phase == MatchPhase.Countdown;
-            float alpha = moving ? _accumulator / dt : 1f;
             _arena.Sync(_sim.State, Time.deltaTime);
             _actors.Sync(_previous, _sim.State, alpha, Time.deltaTime);
             _hud.Update(_sim.State, Time.deltaTime);
         }
 
-        private void HandleEvents()
+        private void HandleEvents(IReadOnlyList<SimEvent> events)
         {
-            foreach (var e in _sim.Events)
+            _events.Clear();
+            _events.AddRange(events); // the list may change while we react
+            foreach (var e in _events)
             {
                 switch (e.Type)
                 {
@@ -203,14 +272,55 @@ namespace BOW.Game
 
         private void TogglePause()
         {
-            if (_sim.State.Phase == MatchPhase.Paused) _sim.Resume();
-            else _sim.Pause();
+            bool paused = _sim.State.Phase == MatchPhase.Paused;
+            switch (_mode)
+            {
+                case Mode.Host:
+                    if (paused) NetSession.Host.Resume(); else NetSession.Host.Pause();
+                    break;
+                case Mode.Guest:
+                    if (paused) NetSession.Guest.RequestResume(); else NetSession.Guest.RequestPause();
+                    break;
+                default:
+                    if (paused) _sim.Resume(); else _sim.Pause();
+                    break;
+            }
+        }
+
+        /// <summary>Restart (offline) or Rematch (host). Guests can't restart; the button is hidden for them.</summary>
+        private void Restart()
+        {
+            if (_mode == Mode.Host) NetSession.Host.StartMatch(); // MatchStarted rebuilds the scene
+            else if (_mode == Mode.Offline) StartMatch();
+        }
+
+        /// <summary>
+        /// Offline: back to the menu. Host after the match: everyone back to the lobby; host mid-match: ends it for all.
+        /// Guest: leaves, and an AI takes the seat.
+        /// </summary>
+        private void Quit()
+        {
+            switch (_mode)
+            {
+                case Mode.Host:
+                    if (_sim.IsEnded) { NetSession.ReturnToLobby(); return; }
+                    NetSession.End();
+                    break;
+                case Mode.Guest:
+                    NetSession.End();
+                    break;
+            }
+            if (Application.CanStreamedLevelBeLoaded(BootLoader.MenuScene)) SceneManager.LoadScene(BootLoader.MenuScene);
+            else if (_mode == Mode.Offline) StartMatch();
         }
 
         private void OnApplicationPause(bool paused)
         {
-            // US-6.1: pause automatically when the app goes to the background.
-            if (paused && _sim != null) _sim.Pause();
+            if (!paused) return;
+            // US-6.1 / TDD 8.8: pause automatically when the app goes to the background.
+            // A guest can't pause others by backgrounding, so it keeps going.
+            if (_mode == Mode.Host) NetSession.Host?.Pause();
+            else if (_mode == Mode.Offline && _sim != null) _sim.Pause();
         }
 
         private void PlaceCamera()

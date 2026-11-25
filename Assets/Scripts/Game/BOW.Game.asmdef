@@ -4,7 +4,10 @@
     "references": [
         "BOW.Simulation",
         "BOW.AI",
+        "BOW.Net",
         "Unity.InputSystem",
+        "Unity.Networking.Transport",
+        "Unity.Collections",
         "UnityEngine.UI",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime"

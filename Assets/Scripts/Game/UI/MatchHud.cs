@@ -24,6 +24,12 @@ namespace BOW.Game
         private readonly SeatPanel[] _panels = new SeatPanel[SeatFrame.SeatCount];
         private readonly Text _clock;
         private readonly Text _banner;
+        public enum Role { Offline, Host, Guest }
+
+        private Button _restartButton, _quitButton, _rematchButton, _menuButton;
+        private Text _quitQuestion;
+        private Role _role;
+
         private readonly Image _blastFill;
         private readonly Image _blastCore;
         private float _blastReadyTime;
@@ -93,8 +99,8 @@ namespace BOW.Game
             UiFactory.Image(_pauseScreen, new Color(0f, 0f, 0f, 0.6f));
             UiFactory.Text(UiFactory.Rect("Title", _pauseScreen, new Vector2(0.5f, 0.65f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(800f, 160f)), "PAUSED", 110, Color.white);
             UiFactory.Button(_pauseScreen, "Resume", new Vector2(0.5f, 0.45f), Vector2.zero, new Vector2(420f, 100f), new Color(0.1f, 0.55f, 0.75f), () => PauseClicked?.Invoke());
-            UiFactory.Button(_pauseScreen, "Restart", new Vector2(0.5f, 0.32f), Vector2.zero, new Vector2(420f, 100f), new Color(0.25f, 0.28f, 0.35f), () => RestartClicked?.Invoke());
-            UiFactory.Button(_pauseScreen, "Quit to menu", new Vector2(0.5f, 0.19f), Vector2.zero, new Vector2(420f, 100f), new Color(0.25f, 0.28f, 0.35f), () => _quitConfirm.gameObject.SetActive(true));
+            _restartButton = UiFactory.Button(_pauseScreen, "Restart", new Vector2(0.5f, 0.32f), Vector2.zero, new Vector2(420f, 100f), new Color(0.25f, 0.28f, 0.35f), () => RestartClicked?.Invoke());
+            _quitButton = UiFactory.Button(_pauseScreen, "Quit to menu", new Vector2(0.5f, 0.19f), Vector2.zero, new Vector2(420f, 100f), new Color(0.25f, 0.28f, 0.35f), () => _quitConfirm.gameObject.SetActive(true));
             _pauseScreen.gameObject.SetActive(false);
 
             // Quit confirmation (US-6.4).
@@ -102,7 +108,7 @@ namespace BOW.Game
             UiFactory.Image(_quitConfirm, new Color(0f, 0f, 0f, 0.6f));
             var box = UiFactory.Rect("Box", _quitConfirm, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(960f, 420f));
             UiFactory.Image(box, PanelColor);
-            UiFactory.Text(UiFactory.Rect("Question", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(900f, 160f)),
+            _quitQuestion = UiFactory.Text(UiFactory.Rect("Question", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(900f, 160f)),
                 "Leave the match?\nIt will count as a loss.", 52, Color.white);
             UiFactory.Button(box, "Leave", new Vector2(0.5f, 0f), new Vector2(-190f, 100f), new Vector2(320f, 100f), new Color(0.7f, 0.2f, 0.2f), () => QuitClicked?.Invoke());
             UiFactory.Button(box, "Stay", new Vector2(0.5f, 0f), new Vector2(190f, 100f), new Vector2(320f, 100f), new Color(0.25f, 0.28f, 0.35f), () => _quitConfirm.gameObject.SetActive(false));
@@ -121,13 +127,37 @@ namespace BOW.Game
                 _resultLines[i] = UiFactory.Text(UiFactory.Rect("Line", row, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(124f, 0f), new Vector2(960f, 100f)),
                     "", 40, Color.white, TextAnchor.MiddleLeft);
             }
-            UiFactory.Button(_resultsScreen, "Rematch", new Vector2(0.5f, 0.12f), new Vector2(-230f, 0f), new Vector2(420f, 100f), new Color(0.1f, 0.55f, 0.75f), () => RestartClicked?.Invoke());
-            UiFactory.Button(_resultsScreen, "Main menu", new Vector2(0.5f, 0.12f), new Vector2(230f, 0f), new Vector2(420f, 100f), new Color(0.25f, 0.28f, 0.35f), () => QuitClicked?.Invoke());
+            _rematchButton = UiFactory.Button(_resultsScreen, "Rematch", new Vector2(0.5f, 0.12f), new Vector2(-230f, 0f), new Vector2(420f, 100f), new Color(0.1f, 0.55f, 0.75f), () => RestartClicked?.Invoke());
+            _menuButton = UiFactory.Button(_resultsScreen, "Main menu", new Vector2(0.5f, 0.12f), new Vector2(230f, 0f), new Vector2(420f, 100f), new Color(0.25f, 0.28f, 0.35f), () => QuitClicked?.Invoke());
             _resultsScreen.gameObject.SetActive(false);
 
             for (int i = 0; i < SeatFrame.SeatCount; i++)
                 if (sim.State.Seats[i].Status == SeatStatus.Closed) _panels[i].Root.gameObject.SetActive(false);
         }
+
+        /// <summary>Sets the pause, quit and results buttons for offline play, a LAN host or a LAN guest.</summary>
+        public void ConfigureFor(Role role)
+        {
+            _role = role;
+            _restartButton.gameObject.SetActive(role == Role.Offline);
+            switch (role)
+            {
+                case Role.Host:
+                    SetLabel(_quitButton, "End match");
+                    _quitQuestion.text = "End the match for everyone?";
+                    SetLabel(_menuButton, "Back to lobby");
+                    break;
+                case Role.Guest:
+                    SetLabel(_quitButton, "Leave match");
+                    _quitQuestion.text = "Leave the match?\nAn AI will take your place.";
+                    _rematchButton.gameObject.SetActive(false);
+                    SetLabel(_menuButton, "Leave");
+                    _menuButton.GetComponent<RectTransform>().anchoredPosition = Vector2.zero;
+                    break;
+            }
+        }
+
+        private static void SetLabel(Button button, string text) => button.GetComponentInChildren<Text>().text = text;
 
         public void Destroy() => UnityEngine.Object.Destroy(_canvas.gameObject);
 
@@ -217,6 +247,7 @@ namespace BOW.Game
             _resultsScreen.gameObject.SetActive(true);
             _banner.text = "";
             _resultsTitle.text = state.IsDraw ? "DRAW!" : state.WinnerSeat == _localSeat ? "YOU WIN!" : $"{Label(state.WinnerSeat).ToUpperInvariant()} WINS!";
+            if (_role == Role.Guest) _resultsTitle.text += "\n<size=40>Waiting for the host: rematch or lobby</size>";
 
             int row = 0;
             for (int place = 1; place <= SeatFrame.SeatCount; place++)
