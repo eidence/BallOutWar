@@ -164,7 +164,8 @@ namespace BOW.Game
             _arena = new ArenaView(_sim.Arena, _worldRoot, localSeat);
             _actors = new MatchActorsView(_sim, _worldRoot, _characters);
 
-            _hud = new MatchHud(_sim, localSeat, _characters, _studio.Portraits);
+            var lobby = _mode == Mode.Host ? NetSession.Host.Lobby : _mode == Mode.Guest ? NetSession.Guest.Lobby : null;
+            _hud = new MatchHud(_sim, localSeat, _characters, _studio.Portraits, PlayerNamesFrom(lobby));
             _hud.ConfigureFor(_mode == Mode.Offline ? MatchHud.Role.Offline : _mode == Mode.Host ? MatchHud.Role.Host : MatchHud.Role.Guest);
             _hud.PauseClicked += TogglePause;
             _hud.RestartClicked += Restart;
@@ -172,6 +173,15 @@ namespace BOW.Game
             _hud.BlastPressed += _local.PressBlast;
 
             PlaceCamera();
+        }
+
+        /// <summary>Human players' names by seat; AI and empty seats are null so the HUD shows the character.</summary>
+        private static string[] PlayerNamesFrom(LobbyState lobby)
+        {
+            if (lobby == null) return null;
+            var names = new string[SeatFrame.SeatCount];
+            for (int i = 0; i < names.Length; i++) names[i] = lobby.Seats[i].Type == SeatType.Human ? lobby.Seats[i].Name : null;
+            return names;
         }
 
         private bool[] BuildSeatList()

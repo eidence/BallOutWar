@@ -29,6 +29,7 @@ namespace BOW.Game
         private Button _restartButton, _quitButton, _rematchButton, _menuButton;
         private Text _quitQuestion;
         private Role _role;
+        private readonly string[] _names;
 
         private readonly Image _blastFill;
         private readonly Image _blastCore;
@@ -47,8 +48,10 @@ namespace BOW.Game
         public event Action QuitClicked;
         public event Action BlastPressed;
 
-        public MatchHud(MatchSimulation sim, int localSeat, int[] characters, RenderTexture[] portraits)
+        /// <param name="names">Player names by seat for LAN matches; null entries (and offline play) show the character name.</param>
+        public MatchHud(MatchSimulation sim, int localSeat, int[] characters, RenderTexture[] portraits, string[] names = null)
         {
+            _names = names;
             _sim = sim;
             _localSeat = localSeat;
             _characters = characters;
@@ -166,7 +169,7 @@ namespace BOW.Game
 
         public void Destroy() => UnityEngine.Object.Destroy(_canvas.gameObject);
 
-        public string Label(int seat) => seat == _localSeat ? "You" : Characters.Names[_characters[seat]];
+        public string Label(int seat) => seat == _localSeat ? "You" : _names?[seat] ?? Characters.Names[_characters[seat]];
 
         public void ShowBanner(string text, Color color, float seconds = 1.4f)
         {
@@ -317,7 +320,7 @@ namespace BOW.Game
 
                 float textLeft = ringSize * 0.32f + ringSize * 0.5f + 8f;
                 UiFactory.Text(UiFactory.Rect("Name", Root, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(textLeft, -12f), new Vector2(200f, 36f)),
-                    local ? $"YOU ({Characters.Names[hud._characters[seat]]})" : Characters.Names[hud._characters[seat]].ToUpperInvariant(),
+                    local ? $"YOU ({Characters.Names[hud._characters[seat]]})" : hud.Label(seat).ToUpperInvariant(),
                     local ? 28 : 26, Color.Lerp(_color, Color.white, 0.35f), TextAnchor.MiddleLeft);
                 _status = UiFactory.Text(UiFactory.Rect("Status", Root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(textLeft - 6f, 12f), new Vector2(200f, 30f)),
                     "", 22, new Color(1f, 1f, 1f, 0.75f), TextAnchor.MiddleLeft);
