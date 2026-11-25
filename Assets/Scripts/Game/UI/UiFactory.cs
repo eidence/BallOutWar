@@ -93,7 +93,7 @@ namespace BOW.Game
             colors.highlightedColor = new Color(1.15f, 1.15f, 1.15f, 1f);
             colors.pressedColor = new Color(0.75f, 0.75f, 0.75f, 1f);
             button.colors = colors;
-            button.onClick.AddListener(() => onClick());
+            button.onClick.AddListener(() => { GameAudio.Play(Sfx.Click); onClick(); });
             Text(Stretch("Label", rt), label, Mathf.RoundToInt(size.y * 0.42f), Color.white);
             return button;
         }

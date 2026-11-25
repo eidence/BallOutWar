@@ -16,6 +16,7 @@ namespace BOW.Editor
             "android.permission.ACCESS_WIFI_STATE",
             "android.permission.ACCESS_NETWORK_STATE",
             "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+            "android.permission.VIBRATE",
         };
 
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";

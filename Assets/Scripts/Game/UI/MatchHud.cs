@@ -61,7 +61,11 @@ namespace BOW.Game
             _panels[left] = new SeatPanel(this, root, left, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -22f));
             _panels[far] = new SeatPanel(this, root, far, new Vector2(0.5f, 1f), new Vector2(1f, 1f), new Vector2(-160f, -22f));
             _panels[right] = new SeatPanel(this, root, right, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-150f, -22f));
-            _panels[localSeat] = new SeatPanel(this, root, localSeat, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(50f, 28f));
+            // Your panel and the blast button swap sides for left-handed players (US-7.5).
+            bool leftHanded = SettingsStore.Current.LeftHanded;
+            _panels[localSeat] = leftHanded
+                ? new SeatPanel(this, root, localSeat, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-50f, 28f))
+                : new SeatPanel(this, root, localSeat, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(50f, 28f));
 
             // Clock in its hexagonal frame at top centre.
             var frame = HudSprites.TimerFrame;
@@ -80,7 +84,8 @@ namespace BOW.Game
 
             // Blast button (bottom-right), fires on touch-down. The ring's segments light up clockwise as the
             // cooldown recovers, and the starburst core appears when the blast is ready.
-            var blast = UiFactory.Rect("Blast", root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-36f, 32f), new Vector2(270f, 270f));
+            var blastCorner = leftHanded ? new Vector2(0f, 0f) : new Vector2(1f, 0f);
+            var blast = UiFactory.Rect("Blast", root, blastCorner, blastCorner, new Vector2(leftHanded ? 36f : -36f, 32f), new Vector2(270f, 270f));
             var blastBg = UiFactory.Image(blast, Color.white, HudSprites.BlastEmpty);
             _blastFill = UiFactory.Image(UiFactory.Stretch("Fill", blast), Color.white, HudSprites.BlastFill);
             _blastFill.type = Image.Type.Filled;

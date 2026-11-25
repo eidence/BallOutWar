@@ -57,10 +57,11 @@ namespace BOW.Game
         private Transform _worldRoot;
         private float _accumulator;
         private int _screenWidth, _screenHeight;
+        private int _lastCountdown;
 
         private void Awake()
         {
-            Application.targetFrameRate = 60;
+            SettingsStore.Apply();
             _camera = Camera.main;
             if (_camera == null) _camera = new GameObject("Main Camera") { tag = "MainCamera" }.AddComponent<Camera>();
             SceneLook.Apply(_camera);
@@ -205,6 +206,8 @@ namespace BOW.Game
                         _accumulator -= dt;
                         if (guest.Tick(_local.Consume()))
                         {
+                            GameAudio.Play(Sfx.Blast);
+                            Haptics.Pulse(20);
                             float along = guest.Simulation.State.Seats[localSeat].PaddlePosition;
                             _actors.PlayBlast(localSeat, SeatFrame.ToWorld(localSeat, _sim.Arena.HalfSize, along, _sim.Config.PaddleOffset));
                         }
@@ -235,6 +238,7 @@ namespace BOW.Game
                     break;
             }
 
+            CountdownBeeps();
             _arena.Sync(_sim.State, Time.deltaTime);
             _actors.Sync(_previous, _sim.State, alpha, Time.deltaTime);
             _hud.Update(_sim.State, Time.deltaTime);
@@ -250,15 +254,36 @@ namespace BOW.Game
                 {
                     case SimEventType.Blast:
                         _actors.PlayBlast(e.Seat, e.Position);
+                        GameAudio.Play(Sfx.Blast, e.Seat == localSeat ? 1f : 0.7f);
+                        if (e.Seat == localSeat) Haptics.Pulse(20);
+                        break;
+                    case SimEventType.PaddleHit:
+                        GameAudio.Play(Sfx.PaddleHit, 0.8f, UnityEngine.Random.Range(0.95f, 1.08f));
+                        break;
+                    case SimEventType.WallBounce:
+                        GameAudio.Play(Sfx.WallBounce, 0.5f, UnityEngine.Random.Range(0.9f, 1.1f));
+                        break;
+                    case SimEventType.BallCollision:
+                        GameAudio.Play(Sfx.BallClack, 0.7f);
                         break;
                     case SimEventType.Goal:
                         _arena.FlashGoal(e.Seat);
                         _hud.OnGoal(e.Seat);
                         _hud.ShowBanner(e.Seat == localSeat ? "OUCH!" : $"{_hud.Label(e.Seat).ToUpperInvariant()} CONCEDES!",
                             SimSpace.SeatColors[e.Seat]);
+                        if (e.Seat == localSeat) { GameAudio.Play(Sfx.Conceded); Haptics.Pulse(40); }
+                        else GameAudio.Play(Sfx.Goal, 0.8f);
                         break;
                     case SimEventType.Eliminated:
                         _hud.ShowBanner(e.Seat == localSeat ? "YOU'RE OUT!" : $"{_hud.Label(e.Seat).ToUpperInvariant()} IS OUT!", Color.white, 2f);
+                        GameAudio.Play(Sfx.Eliminated);
+                        break;
+                    case SimEventType.PhaseChanged:
+                        if (_sim.State.Phase == MatchPhase.Playing) GameAudio.Play(Sfx.Go);
+                        break;
+                    case SimEventType.MatchEnded:
+                        var s = _sim.State;
+                        GameAudio.Play(!s.IsDraw && s.WinnerSeat == localSeat ? Sfx.Win : Sfx.Lose);
                         break;
                     case SimEventType.SuddenDeathStarted:
                         _hud.ShowBanner("SUDDEN DEATH!", new Color(1f, 0.35f, 0.3f), 2f);
@@ -268,6 +293,15 @@ namespace BOW.Game
                         break;
                 }
             }
+        }
+
+        /// <summary>A beep on each whole second of a countdown (3, 2, 1); "Go" comes from the phase change.</summary>
+        private void CountdownBeeps()
+        {
+            var s = _sim.State;
+            int n = s.Phase == MatchPhase.Countdown ? Mathf.CeilToInt(s.CountdownRemaining) : 0;
+            if (n > 0 && n != _lastCountdown) GameAudio.Play(Sfx.CountdownBeep);
+            _lastCountdown = n;
         }
 
         private void TogglePause()

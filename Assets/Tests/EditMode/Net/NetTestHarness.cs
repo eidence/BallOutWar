@@ -31,7 +31,7 @@ namespace BOW.Simulation.Tests.Net
         public NetTestHarness(float latency = 0f, float jitter = 0f, float loss = 0f, int seed = 1)
         {
             Network = new LoopbackNetwork(seed) { Latency = latency, Jitter = jitter, Loss = loss };
-            Host = new NetHost(Network.CreateHost(), "Test match", "Host", 0);
+            Host = new NetHost(Network.CreateHost(), "Test match", "Host", 0, seed);
             Host.Notice += n => Notices.Add(n);
             Host.MatchStarted += () => _hostAi = new AIController(NetHost.LocalSeat, AIDifficulty.Medium, 99);
         }

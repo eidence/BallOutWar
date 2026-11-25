@@ -25,7 +25,7 @@ namespace BOW.Net
         private readonly PlayerInput[] _inputs = new PlayerInput[SeatFrame.SeatCount];
         private readonly uint[] _acked = new uint[SeatFrame.SeatCount];
         private readonly PlayerInput[] _readInputs = new PlayerInput[NetProtocol.RedundantInputs];
-        private readonly Random _seeds = new Random();
+        private readonly Random _seeds;
         private float _pauseDeadline = -1f;
         private uint _snapshotSequence;
         private int _frames;
@@ -42,10 +42,11 @@ namespace BOW.Net
         /// <summary>A short message for the host's screen, such as "Mitzi left: an AI took over".</summary>
         public event Action<string> Notice;
 
-        public NetHost(ITransport transport, string matchName, string hostName, int hostCharacter)
+        public NetHost(ITransport transport, string matchName, string hostName, int hostCharacter, int? randomSeed = null)
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             if (!transport.IsHost) throw new ArgumentException("NetHost needs a host transport.", nameof(transport));
+            _seeds = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
             Lobby.MatchName = PlayerNames.Normalise(matchName);
             Lobby.Seats[LocalSeat] = new LobbySeat { Type = SeatType.Human, Name = PlayerNames.Normalise(hostName), Character = (byte)(hostCharacter % LobbyState.CharacterCount), IsHost = true, Ready = true };
             for (int i = 1; i < Lobby.Seats.Length; i++)

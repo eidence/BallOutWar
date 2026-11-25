@@ -20,7 +20,7 @@ namespace BOW.Game
         private static readonly Color ButtonBlue = MenuTheme.ButtonBlue;
         private static readonly Color ButtonGrey = MenuTheme.ButtonGrey;
 
-        private enum MenuScreen { Main, Setup, ExitConfirm, Lan }
+        private enum MenuScreen { Main, Setup, ExitConfirm, Lan, Settings }
 
         private MatchLaunchConfig _config;
         private PortraitStudio _studio;
@@ -33,10 +33,11 @@ namespace BOW.Game
         private readonly OptionRow[] _opponentRows = new OptionRow[SeatFrame.SeatCount];
         private OptionRow _durationRow, _goalsRow, _tieRow;
         private LanMenu _lan;
+        private SettingsMenu _settings;
 
         private void Awake()
         {
-            Application.targetFrameRate = 60;
+            SettingsStore.Apply();
             var cam = Camera.main;
             SceneLook.Apply(cam);
 
@@ -50,6 +51,7 @@ namespace BOW.Game
             BuildSetup(canvas);
             BuildExitConfirm(canvas);
             _lan = new LanMenu(canvas, _studio.Portraits, () => Show(MenuScreen.Main));
+            _settings = new SettingsMenu(canvas, () => Show(MenuScreen.Main));
             // Back from a LAN match, or a session that just ended: reopen Play Local.
             Show(NetSession.Active || NetSession.EndReason != null ? MenuScreen.Lan : MenuScreen.Main);
         }
@@ -66,6 +68,7 @@ namespace BOW.Game
                 case MenuScreen.Main: Show(MenuScreen.ExitConfirm); break;
                 case MenuScreen.ExitConfirm: Show(MenuScreen.Main); break;
                 case MenuScreen.Lan: _lan.Back(); break;
+                case MenuScreen.Settings: _settings.Close(); break;
             }
         }
 
@@ -87,6 +90,8 @@ namespace BOW.Game
             _exit.gameObject.SetActive(screen == MenuScreen.ExitConfirm);
             if (screen == MenuScreen.Lan) _lan.Show();
             else if (_lan != null) _lan.Hide();
+            if (screen == MenuScreen.Settings) _settings.Show();
+            else _settings?.Hide();
             if (screen == MenuScreen.Setup) RefreshSetup();
         }
 
@@ -115,7 +120,7 @@ namespace BOW.Game
             Add("Play Local", true, ButtonBlue, () => Show(MenuScreen.Lan));
             Add("Play Online  (soon)", false, ButtonGrey, () => { });
             Add("Store  (soon)", false, ButtonGrey, () => { });
-            Add("Settings  (soon)", false, ButtonGrey, () => { });
+            Add("Settings", true, ButtonBlue, () => Show(MenuScreen.Settings));
             Add("Exit", true, ButtonGrey, () => Show(MenuScreen.ExitConfirm));
         }
 

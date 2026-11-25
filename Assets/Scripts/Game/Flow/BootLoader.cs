@@ -14,7 +14,7 @@ namespace BOW.Game
 
         private void Start()
         {
-            Application.targetFrameRate = 60;
+            SettingsStore.Load();
             ProfileStore.Load();
             SceneManager.LoadScene(MenuScene);
         }

@@ -207,7 +207,7 @@ namespace BOW.Simulation.Tests.Net
             var h = new NetTestHarness(latency: 0.075f, jitter: 0.02f, loss: 0.02f, seed: 7);
             var a = h.AddGuest("Alpha", 1);
             var b = h.AddGuest("Bravo", 2);
-            h.Host.SetSettings(new LobbySettings { Mode = GameMode.Timed, DurationSeconds = 40, BallCount = 2 });
+            h.Host.SetSettings(new LobbySettings { Mode = GameMode.Timed, DurationSeconds = 40, BallCount = 2, TieRule = TieRule.AllowDraw });
             h.JoinAllAndStart(aiSeats: 1);
             Assert.That(a.Status, Is.EqualTo(GuestStatus.InMatch));
 
@@ -283,7 +283,7 @@ namespace BOW.Simulation.Tests.Net
             var h = new NetTestHarness(latency: 0.02f);
             var g = h.AddGuest("Dropper");
             h.AddGuest("Stayer");
-            h.Host.SetSettings(new LobbySettings { DurationSeconds = 30 });
+            h.Host.SetSettings(new LobbySettings { DurationSeconds = 30, TieRule = TieRule.AllowDraw });
             h.JoinAllAndStart();
             h.Run(5f);
 
@@ -359,7 +359,7 @@ namespace BOW.Simulation.Tests.Net
             bool backInLobby = false;
             g.MatchStarted += () => starts++;
             g.ReturnedToLobby += () => backInLobby = true;
-            h.Host.SetSettings(new LobbySettings { DurationSeconds = 30 });
+            h.Host.SetSettings(new LobbySettings { DurationSeconds = 30, TieRule = TieRule.AllowDraw });
             h.JoinAllAndStart();
             Assert.That(starts, Is.EqualTo(1));
 
