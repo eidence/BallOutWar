@@ -31,12 +31,27 @@ namespace BOW.Game
 
         private static readonly GameObject[] Loaded = new GameObject[Characters.Count];
         private static readonly bool[] Tried = new bool[Characters.Count];
+
+        /// <summary>
+        /// Clears every cache at the start of each Play session. The project enters Play mode without a domain reload,
+        /// so statics survive between sessions while the materials and avatars made at runtime do not; without this,
+        /// a second Play found "already tried" flags and dead references (Bolt lost his texture).
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetCaches()
+        {
+            System.Array.Clear(Loaded, 0, Loaded.Length);
+            System.Array.Clear(Tried, 0, Tried.Length);
+            System.Array.Clear(BuiltAvatars, 0, BuiltAvatars.Length);
+            System.Array.Clear(Textured, 0, Textured.Length);
+            System.Array.Clear(TexturedTried, 0, TexturedTried.Length);
+        }
         private static readonly Avatar[] BuiltAvatars = new Avatar[Characters.Count];
 
         /// <summary>Standing height to match the primitive characters.</summary>
         public const float StandingHeight = 1.3f;
         /// <summary>Drivers are scaled as if this tall standing: big and readable over the cockpit rim from the match camera.</summary>
-        public const float DrivingHeight = 2.2f;
+        public const float DrivingHeight = 1.9f;
         /// <summary>Height of the hip joint above the seat point when sitting.</summary>
         private const float SeatedHipHeight = 0.14f;
 
@@ -95,12 +110,110 @@ namespace BOW.Game
             model.transform.localRotation = Quaternion.identity;
             model.transform.localScale = Vector3.one * (height > 0.01f ? targetHeight / height : 1f);
 
+            var material = TexturedMaterial(character);
             foreach (var r in model.GetComponentsInChildren<Renderer>())
             {
+                if (material != null)
+                {
+                    var mats = r.sharedMaterials;
+                    for (int i = 0; i < mats.Length; i++) mats[i] = material;
+                    r.sharedMaterials = mats;
+                }
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 if (r is SkinnedMeshRenderer skinned) skinned.updateWhenOffscreen = false;
             }
             return animator;
+        }
+
+        private static readonly Material[] Textured = new Material[Characters.Count];
+        private static readonly bool[] TexturedTried = new bool[Characters.Count];
+
+        /// <summary>
+        /// A material from loose texture files next to the model (<c>&lt;path&gt;_baseColor</c>, optional <c>_normal</c>), or
+        /// null to keep the imported materials. Meshy's FBX embeds its textures under material slots Unity's URP
+        /// importer doesn't map, so Bolt came in untextured; his textures are extracted to these files instead.
+        /// </summary>
+        private static Material TexturedMaterial(int character)
+        {
+            if (TexturedTried[character]) return Textured[character];
+            TexturedTried[character] = true;
+            string path = Entries[character].Path;
+            var baseColor = Resources.Load<Texture2D>(path + "_baseColor");
+            if (baseColor == null) return null;
+            var material = PrototypeMaterials.Create(Color.white, 0.35f);
+            material.name = Characters.Names[character];
+            material.mainTexture = baseColor;
+            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", baseColor);
+            var normal = Resources.Load<Texture2D>(path + "_normal");
+            if (normal != null && material.HasProperty("_BumpMap"))
+            {
+                material.SetTexture("_BumpMap", normal);
+                material.EnableKeyword("_NORMALMAP");
+            }
+            Textured[character] = material;
+            return material;
+        }
+
+        /// <summary>
+        /// Puts a seated driver's hands on the steering wheel: slides the model forward if its arms can't reach
+        /// (chibi arms are short), then bends each arm with a two-bone solve so the wrists land on the grips.
+        /// Grips are world positions; the driver should already be placed in the car.
+        /// </summary>
+        public static void GripWheel(Transform driver, Vector3 leftGrip, Vector3 rightGrip)
+        {
+            var animator = driver.GetComponentInChildren<Animator>(true);
+            if (animator == null || animator.avatar == null) return;
+            bool wasEnabled = animator.enabled;
+            animator.enabled = true; // bone lookups need it on; with no controller it never animates
+            try { GripWheel(animator, driver, leftGrip, rightGrip); }
+            finally { animator.enabled = wasEnabled; }
+        }
+
+        private static void GripWheel(Animator animator, Transform driver, Vector3 leftGrip, Vector3 rightGrip)
+        {
+            if (!animator.isHuman) return;
+            Transform B(HumanBodyBones b) => animator.GetBoneTransform(b);
+            Transform lu = B(HumanBodyBones.LeftUpperArm), ll = B(HumanBodyBones.LeftLowerArm), lh = B(HumanBodyBones.LeftHand);
+            Transform ru = B(HumanBodyBones.RightUpperArm), rl = B(HumanBodyBones.RightLowerArm), rh = B(HumanBodyBones.RightHand);
+            if (lu == null || ll == null || lh == null || ru == null || rl == null || rh == null) return;
+
+            Vector3 forward = driver.forward, up = driver.up, right = driver.right;
+
+            // Hands reach at most ~90% of the arm's length, so slide the driver toward the wheel if needed.
+            float reach = 0.9f * (Vector3.Distance(lu.position, ll.position) + Vector3.Distance(ll.position, lh.position));
+            Vector3 shoulders = (lu.position + ru.position) * 0.5f;
+            Vector3 toGrips = (leftGrip + rightGrip) * 0.5f - shoulders;
+            float along = Vector3.Dot(toGrips, forward);
+            float sideways = (toGrips - forward * along).sqrMagnitude;
+            float halfSpan = Vector3.Distance(leftGrip, rightGrip) * 0.5f;
+            float reachForward = Mathf.Sqrt(Mathf.Max(0f, reach * reach - sideways - halfSpan * halfSpan));
+            float slide = Mathf.Clamp(along - reachForward, 0f, reach * 1.5f);
+            if (slide > 0f) animator.transform.position += forward * slide;
+
+            // Elbows point down, out and slightly back.
+            SolveArm(lu, ll, lh, leftGrip, lu.position - right * 0.6f - up - forward * 0.3f);
+            SolveArm(ru, rl, rh, rightGrip, ru.position + right * 0.6f - up - forward * 0.3f);
+        }
+
+        /// <summary>Analytic two-bone IK: places the elbow on the circle allowed by the bone lengths, toward <paramref name="pole"/>.</summary>
+        private static void SolveArm(Transform upper, Transform lower, Transform hand, Vector3 target, Vector3 pole)
+        {
+            Vector3 s = upper.position;
+            float a = Vector3.Distance(s, lower.position), b = Vector3.Distance(lower.position, hand.position);
+            if (a < 1e-4f || b < 1e-4f) return;
+            Vector3 toTarget = target - s;
+            float d = Mathf.Clamp(toTarget.magnitude, Mathf.Abs(a - b) + 1e-3f, (a + b) * 0.999f);
+            Vector3 dir = toTarget.normalized;
+            Vector3 bend = pole - s;
+            bend -= Vector3.Dot(bend, dir) * dir;
+            if (bend.sqrMagnitude < 1e-6f) bend = Vector3.Cross(dir, Vector3.right);
+            bend.Normalize();
+            float x = (a * a - b * b + d * d) / (2f * d);
+            float h = Mathf.Sqrt(Mathf.Max(0f, a * a - x * x));
+            Vector3 elbow = s + dir * x + bend * h;
+            upper.rotation = Quaternion.FromToRotation(lower.position - s, elbow - s) * upper.rotation;
+            Vector3 wrist = s + dir * d;
+            lower.rotation = Quaternion.FromToRotation(hand.position - lower.position, wrist - lower.position) * lower.rotation;
         }
 
         private static GameObject Load(int character)
@@ -115,16 +228,103 @@ namespace BOW.Game
             return Loaded[character];
         }
 
-        private static float MeasureHeight(GameObject model)
+        /// <summary>
+        /// The part of a standing model a portrait should show: from the chest up to the top of the head, ignoring
+        /// the thinnest 3% at the top (antenna tips, crest points) so they don't shrink the face. Returns the
+        /// world-space centre of that region and its height. False for the primitive stand-ins.
+        /// </summary>
+        public static bool PortraitFocus(Transform root, out Vector3 centre, out float size)
         {
-            bool any = false;
-            var bounds = new Bounds();
+            centre = Vector3.zero;
+            size = 0f;
+            var animator = root.GetComponentInChildren<Animator>(true);
+            if (animator == null || animator.avatar == null) return false;
+            bool wasEnabled = animator.enabled;
+            animator.enabled = true;
+            var chest = animator.isHuman
+                ? (animator.GetBoneTransform(HumanBodyBones.Chest) ?? animator.GetBoneTransform(HumanBodyBones.Spine))
+                : null;
+            animator.enabled = wasEnabled;
+
+            var points = new List<Vector3>();
+            CollectWorldVertices(animator.gameObject, points);
+            if (points.Count == 0) return false;
+            float floor = chest != null ? chest.position.y : float.MinValue;
+            var heights = new List<float>();
+            foreach (var p in points) if (p.y >= floor) heights.Add(p.y);
+            if (heights.Count < 10) return false;
+            heights.Sort();
+            float bottom = heights[0], top = heights[(int)((heights.Count - 1) * 0.97f)];
+
+            // Centre horizontally on the body itself (median), not on arms or a tail sticking out.
+            var xs = new List<float>();
+            var zs = new List<float>();
+            foreach (var p in points)
+                if (p.y >= floor && p.y <= top) { xs.Add(p.x); zs.Add(p.z); }
+            xs.Sort();
+            zs.Sort();
+            size = top - bottom;
+            centre = new Vector3(xs[xs.Count / 2], (bottom + top) * 0.5f, zs[zs.Count / 2]);
+            return size > 0.01f;
+        }
+
+        private static void CollectWorldVertices(GameObject model, List<Vector3> into)
+        {
+            var baked = new Mesh();
+            var local = new List<Vector3>();
             foreach (var r in model.GetComponentsInChildren<Renderer>())
             {
-                if (!any) { bounds = r.bounds; any = true; }
-                else bounds.Encapsulate(r.bounds);
+                Matrix4x4 toWorld;
+                if (r is SkinnedMeshRenderer skinned && skinned.sharedMesh != null)
+                {
+                    skinned.BakeMesh(baked, true);
+                    baked.GetVertices(local);
+                    toWorld = Matrix4x4.TRS(r.transform.position, r.transform.rotation, Vector3.one);
+                }
+                else if (r.TryGetComponent<MeshFilter>(out var filter) && filter.sharedMesh != null)
+                {
+                    filter.sharedMesh.GetVertices(local);
+                    toWorld = r.transform.localToWorldMatrix;
+                }
+                else continue;
+                foreach (var v in local) into.Add(toWorld.MultiplyPoint3x4(v));
             }
-            return any ? bounds.size.y : 0f;
+            Object.Destroy(baked);
+        }
+
+        /// <summary>
+        /// Height of the model's actual vertices as posed. Renderer bounds aren't reliable here: a skinned mesh's
+        /// bounds are whatever the importer set (and differ between models), which made Mitzi come out oversized.
+        /// </summary>
+        private static float MeasureHeight(GameObject model)
+        {
+            float min = float.MaxValue, max = float.MinValue;
+            var baked = new Mesh();
+            var vertices = new List<Vector3>();
+            foreach (var r in model.GetComponentsInChildren<Renderer>())
+            {
+                Matrix4x4 toWorld;
+                if (r is SkinnedMeshRenderer skinned && skinned.sharedMesh != null)
+                {
+                    skinned.BakeMesh(baked, true); // vertices in the renderer's space, scale applied
+                    baked.GetVertices(vertices);
+                    toWorld = Matrix4x4.TRS(r.transform.position, r.transform.rotation, Vector3.one);
+                }
+                else if (r.TryGetComponent<MeshFilter>(out var filter) && filter.sharedMesh != null)
+                {
+                    filter.sharedMesh.GetVertices(vertices);
+                    toWorld = r.transform.localToWorldMatrix;
+                }
+                else continue;
+                foreach (var v in vertices)
+                {
+                    float y = toWorld.MultiplyPoint3x4(v).y;
+                    if (y < min) min = y;
+                    if (y > max) max = y;
+                }
+            }
+            Object.Destroy(baked);
+            return max > min ? max - min : 0f;
         }
 
         /// <summary>Moves the model so its hips sit on the seat point (the root's origin).</summary>

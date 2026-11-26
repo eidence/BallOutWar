@@ -140,7 +140,7 @@ namespace BOW.Game
             UiFactory.Text(tag, "Defend your goal. Blast the rest.", 40, Color.white);
 
             var column = UiFactory.Rect("Buttons", _main, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(80f, -60f), new Vector2(560f, 760f));
-            float y = 330f;
+            float y = 276f; // six buttons, centred in the column
             void Add(string label, bool enabled, Color color, Action onClick)
             {
                 var b = UiFactory.Button(column, label, new Vector2(0.5f, 0.5f), new Vector2(0f, y), new Vector2(540f, 92f), color, onClick);
@@ -149,7 +149,6 @@ namespace BOW.Game
             }
 
             Add("Play Solo", true, ButtonBlue, () => Show(MenuScreen.Setup));
-            Add("Practice", true, ButtonBlue, StartPractice);
             Add("Play Local", true, ButtonBlue, () => Show(MenuScreen.Lan));
             Add("Play Online  (soon)", false, ButtonGrey, () => { });
             Add("Store", true, ButtonBlue, () => OpenStore(MenuScreen.Main));
@@ -338,15 +337,6 @@ namespace BOW.Game
             profile.LastMatch = _config.Clone();
             ProfileStore.Save();
             MatchLaunch.Pending = _config.Clone();
-            SceneManager.LoadScene(BootLoader.MatchScene);
-        }
-
-        private void StartPractice()
-        {
-            var practice = _config.Clone();
-            practice.Mode = GameMode.Practice;
-            practice.BallCount = 1;
-            MatchLaunch.Pending = practice;
             SceneManager.LoadScene(BootLoader.MatchScene);
         }
 

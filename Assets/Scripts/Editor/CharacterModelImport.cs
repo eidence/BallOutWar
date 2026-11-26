@@ -12,6 +12,19 @@ namespace BOW.Editor
     {
         private const string Folder = "Assets/Resources/Models/";
 
+        /// <summary>Car paint textures: 1024 px is plenty for a car on a phone screen.</summary>
+        private void OnPreprocessTexture()
+        {
+            bool car = assetPath.StartsWith("Assets/Resources/Cars/");
+            bool character = assetPath.StartsWith(Folder);
+            if (!car && !character) return;
+            var importer = (TextureImporter)assetImporter;
+            importer.maxTextureSize = 1024;
+            importer.mipmapEnabled = true;
+            // Loose character textures extracted from an FBX (e.g. bolt_normal.png) need the normal-map type.
+            if (character && assetPath.EndsWith("_normal.png")) importer.textureType = TextureImporterType.NormalMap;
+        }
+
         private void OnPreprocessModel()
         {
             if (!assetPath.StartsWith(Folder)) return;

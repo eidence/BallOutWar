@@ -18,8 +18,16 @@ namespace BOW.Game
         /// the rubber bumper sits on the front of the simulation's paddle capsule, so balls visibly bounce off it;
         /// the tub reaches back into the goal pocket. Returns the leaning "Body" and where the driver sits.
         /// </summary>
-        private static Transform BuildBumperCar(Transform car, GameplayConfig cfg, Color color, Material rubber, out Vector3 seat)
+        private static Transform BuildBumperCar(Transform car, GameplayConfig cfg, int seatIndex, Color color, Material rubber, out Vector3 seat, out Vector3 leftGrip, out Vector3 rightGrip)
         {
+            if (CarModel.Available)
+            {
+                var modelBody = new GameObject("Body").transform;
+                modelBody.SetParent(car, false);
+                if (CarModel.TryBuild(modelBody, cfg, seatIndex, out seat, out leftGrip, out rightGrip)) return modelBody;
+                Object.Destroy(modelBody.gameObject);
+            }
+
             float width = (cfg.PaddleHalfLength + cfg.PaddleRadius) * 2f - 0.3f; // bumper bulge brings it back to full length
             var l = new BumperCarMesh.Layout(width, cfg.PaddleRadius - 0.15f, CarDepth);
 
@@ -63,6 +71,10 @@ namespace BOW.Game
                 new Vector3(0f, l.BackRimY + 0.98f, poleZ), Vector3.one * 0.15f);
 
             seat = new Vector3(0f, l.FloorY - 0.05f, l.CockpitZ + 0.02f);
+            // Wheel rim at the sides (the wheel is 0.42 across, tilted 55° toward the driver).
+            var wheel = new Vector3(0f, 0.92f, wheelZ - 0.05f);
+            leftGrip = wheel + new Vector3(-0.19f, 0f, 0f);
+            rightGrip = wheel + new Vector3(0.19f, 0f, 0f);
             return body;
         }
 
@@ -92,12 +104,13 @@ namespace BOW.Game
                 car.localRotation = SimSpace.SeatRotation(seat);
                 // Local space: +X along the goal line, +Z into the arena.
 
-                var body = BuildBumperCar(car, cfg, color, rubber, out var seatPos);
+                var body = BuildBumperCar(car, cfg, seat, color, rubber, out var seatPos, out var leftGrip, out var rightGrip);
                 _seats[seat] = seatPos;
 
                 var driver = Characters.Build(characterBySeat[seat], body, seated: true);
                 driver.localPosition = seatPos;
                 driver.localScale = Vector3.one * 1.05f;
+                CharacterModels.GripWheel(driver, body.TransformPoint(leftGrip), body.TransformPoint(rightGrip));
 
                 _cars[seat] = car;
                 _bodies[seat] = body;

@@ -15,6 +15,16 @@ namespace BOW.Game
 
         private readonly Camera[] _cameras = new Camera[Characters.Count];
 
+        /// <summary>
+        /// How far to raise each character's head in their portrait ring, as a fraction of the framed size
+        /// (Bolt, Mitzi, Hopper, Pip). Set by eye so the tops of the heads line up; antennae, ears and crests stick
+        /// up above that line. Positive = higher in the ring.
+        /// </summary>
+        private static readonly float[] PortraitRaise = { 0.17f, 0f, 0f, 0f };
+
+        /// <summary>How far to move each character right in their ring, as a fraction of the framed size. Positive = right.</summary>
+        private static readonly float[] PortraitShiftRight = { 0f, 0.08f, 0f, 0f };
+
         public RenderTexture[] Portraits { get; } = new RenderTexture[Characters.Count];
 
         public PortraitStudio(Transform parent)
@@ -23,6 +33,8 @@ namespace BOW.Game
             root.SetParent(parent, false);
             root.position = Origin;
 
+            var critters = new Transform[Characters.Count];
+            var spots = new Transform[Characters.Count];
             for (int c = 0; c < Characters.Count; c++)
             {
                 var spot = new GameObject($"Spot {Characters.Names[c]}").transform;
@@ -47,7 +59,33 @@ namespace BOW.Game
                 cam.backgroundColor = new Color(0.05f, 0.07f, 0.12f, 1f);
                 cam.targetTexture = rt;
                 _cameras[c] = cam;
+                critters[c] = critter;
+                spots[c] = spot;
             }
+
+            // Frame every real model on its chest-up region, then apply its hand-set nudge (heads are judged by eye:
+            // goggles, ears and antennae defeat any automatic "top of the head").
+            for (int c = 0; c < Characters.Count; c++)
+            {
+                if (!CharacterModels.PortraitFocus(critters[c], out var centre, out float size)) continue;
+                centre.y -= PortraitRaise[c] * size; // aim lower, so the head rises in the ring
+                FrameOnModel(_cameras[c], spots[c], centre, size);
+                _cameras[c].transform.position -= _cameras[c].transform.right * (PortraitShiftRight[c] * size); // camera left = character right
+            }
+        }
+
+        /// <summary>
+        /// For a real model, frames the chest-up region so every character fills the ring the same way, whatever their
+        /// ears, antennae or proportions. The stand-ins keep the fixed framing.
+        /// </summary>
+        private static void FrameOnModel(Camera cam, Transform spot, Vector3 centre, float size)
+        {
+            const float margin = 1.2f; // the round mask hides the corners, so leave a little room
+            float distance = size * 0.5f * margin / Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            var direction = (spot.forward + Vector3.up * 0.12f).normalized;
+            cam.transform.position = centre + direction * distance;
+            cam.transform.LookAt(centre);
+            cam.farClipPlane = distance + size * 2f;
         }
 
         /// <summary>Lets the cameras draw for a couple of frames, then turns them off.</summary>
