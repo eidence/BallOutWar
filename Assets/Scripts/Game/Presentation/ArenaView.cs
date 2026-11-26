@@ -12,7 +12,7 @@ namespace BOW.Game
     {
         private const float WallHeight = 0.9f;
         private const float WallThickness = 0.5f;
-        private const float PocketDepth = 1.6f;
+        private const float PocketDepth = 2.0f;
         private const float GateHeight = 2.2f;
         private const float FlashSeconds = 0.6f;
 

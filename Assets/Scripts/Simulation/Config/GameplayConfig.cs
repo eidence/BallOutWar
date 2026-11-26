@@ -16,7 +16,7 @@ namespace BOW.Simulation
         public float FinalCountdownSeconds = 10f;
 
         // Paddle (US-2.2)
-        public float PaddleHalfLength = 1.4f;
+        public float PaddleHalfLength = 0.8f;
         public float PaddleRadius = 0.4f;
         public float PaddleOffset = 0.8f;      // distance in front of the goal line
         public float PaddleMaxSpeed = 14f;

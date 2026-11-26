@@ -20,10 +20,12 @@ namespace BOW.Game
             "Speedy sky bird",
         };
 
-        public static Transform Build(int character, Transform parent)
+        /// <param name="seated">Pose a real model sitting in a car (the primitive stand-ins are always seated-height).</param>
+        public static Transform Build(int character, Transform parent, bool seated = false)
         {
             var root = new GameObject(Names[character]).transform;
             root.SetParent(parent, false);
+            if (CharacterModels.TryBuild(character, root, seated)) return root;
             switch (character)
             {
                 case 0: Robot(root); break;

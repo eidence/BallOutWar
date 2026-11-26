@@ -38,8 +38,6 @@ namespace BOW.Game
         [SerializeField] private AIDifficulty[] seatDifficulty = { AIDifficulty.Medium, AIDifficulty.Medium, AIDifficulty.Medium, AIDifficulty.Medium };
 
         [Header("Camera")]
-        [SerializeField, Range(30f, 80f)] private float cameraPitch = 55f;
-        [SerializeField, Range(20f, 60f)] private float cameraFieldOfView = 35f;
 
         private Mode _mode;
         private MatchSimulation _sim;
@@ -427,7 +425,7 @@ namespace BOW.Game
         {
             _screenWidth = Screen.width;
             _screenHeight = Screen.height;
-            if (_sim != null) MatchCameraRig.Place(_camera, localSeat, _sim.Arena.HalfSize, cameraPitch, cameraFieldOfView);
+            if (_sim != null) MatchCameraRig.Place(_camera, localSeat, _sim.Arena);
         }
     }
 }

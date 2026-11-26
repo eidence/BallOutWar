@@ -11,12 +11,67 @@ namespace BOW.Game
     {
         private const float MaxLeanDegrees = 9f;
         private const float PunchSeconds = 0.18f;
+        private const float CarDepth = 3.1f;
+
+        /// <summary>
+        /// Builds a bumper car in the car's local space (+X along the goal line, +Z into the arena). The front of
+        /// the rubber bumper sits on the front of the simulation's paddle capsule, so balls visibly bounce off it;
+        /// the tub reaches back into the goal pocket. Returns the leaning "Body" and where the driver sits.
+        /// </summary>
+        private static Transform BuildBumperCar(Transform car, GameplayConfig cfg, Color color, Material rubber, out Vector3 seat)
+        {
+            float width = (cfg.PaddleHalfLength + cfg.PaddleRadius) * 2f - 0.3f; // bumper bulge brings it back to full length
+            var l = new BumperCarMesh.Layout(width, cfg.PaddleRadius - 0.15f, CarDepth);
+
+            var paint = PrototypeMaterials.Create(color, 0.8f, 0.25f);
+            var interior = PrototypeMaterials.Create(Color.Lerp(color, Color.black, 0.75f), 0.3f);
+            var chrome = PrototypeMaterials.Create(new Color(0.85f, 0.87f, 0.9f), 0.9f, 1f);
+            var lamp = PrototypeMaterials.Emissive(new Color(1f, 0.85f, 0.35f), 3f);
+            var tip = PrototypeMaterials.Emissive(color, 4f);
+
+            var body = new GameObject("Body").transform;
+            body.SetParent(car, false);
+
+            var shell = new GameObject("Shell");
+            shell.transform.SetParent(body, false);
+            shell.AddComponent<MeshFilter>().sharedMesh = BumperCarMesh.Get(l);
+            shell.AddComponent<MeshRenderer>().sharedMaterials = new[] { paint, rubber, interior };
+
+            // A ring of round lamps studding the bumper.
+            const int lamps = 22;
+            for (int i = 0; i < lamps; i++)
+            {
+                float t = (i + 0.5f) * Mathf.PI * 2f / lamps;
+                PrototypeMaterials.Part(PrimitiveType.Sphere, "Lamp", body, lamp,
+                    BumperCarMesh.Outer(l, t, 0.15f, 0.26f), Vector3.one * 0.13f);
+            }
+
+            // Steering wheel on a column rising from the front of the cockpit, tilted toward the driver.
+            float wheelZ = l.CockpitZ + l.CockpitHalfDepth - 0.08f;
+            PrototypeMaterials.Part(PrimitiveType.Cylinder, "Steering Column", body, rubber,
+                new Vector3(0f, 0.7f, wheelZ + 0.05f), new Vector3(0.07f, 0.22f, 0.07f), new Vector3(-30f, 0f, 0f));
+            PrototypeMaterials.Part(PrimitiveType.Cylinder, "Steering Wheel", body, rubber,
+                new Vector3(0f, 0.92f, wheelZ - 0.05f), new Vector3(0.42f, 0.025f, 0.42f), new Vector3(-55f, 0f, 0f));
+            PrototypeMaterials.Part(PrimitiveType.Sphere, "Horn", body, tip,
+                new Vector3(0f, 0.935f, wheelZ - 0.05f), new Vector3(0.12f, 0.05f, 0.12f), new Vector3(-55f, 0f, 0f));
+
+            // The pole at the back with a glowing spark tip.
+            float poleZ = l.BackZ + 0.3f;
+            PrototypeMaterials.Part(PrimitiveType.Cylinder, "Pole", body, chrome,
+                new Vector3(0f, l.BackRimY + 0.45f, poleZ), new Vector3(0.06f, 0.5f, 0.06f));
+            PrototypeMaterials.Part(PrimitiveType.Sphere, "Pole Tip", body, tip,
+                new Vector3(0f, l.BackRimY + 0.98f, poleZ), Vector3.one * 0.15f);
+
+            seat = new Vector3(0f, l.FloorY - 0.05f, l.CockpitZ + 0.02f);
+            return body;
+        }
 
         private readonly MatchSimulation _sim;
         private readonly Transform[] _cars = new Transform[SeatFrame.SeatCount];
         private readonly Transform[] _bodies = new Transform[SeatFrame.SeatCount];
         private readonly Transform[] _drivers = new Transform[SeatFrame.SeatCount];
         private readonly float[] _punch = new float[SeatFrame.SeatCount];
+        private readonly Vector3[] _seats = new Vector3[SeatFrame.SeatCount];
         private readonly Transform[] _balls = new Transform[MatchState.MaxBalls];
         private readonly TrailRenderer[] _trails = new TrailRenderer[MatchState.MaxBalls];
         private readonly BlastRing[] _rings = new BlastRing[8];
@@ -37,24 +92,12 @@ namespace BOW.Game
                 car.localRotation = SimSpace.SeatRotation(seat);
                 // Local space: +X along the goal line, +Z into the arena.
 
-                // The rubber bumper is exactly the simulation's paddle capsule.
-                float length = cfg.PaddleHalfLength + cfg.PaddleRadius;
-                PrototypeMaterials.Part(PrimitiveType.Capsule, "Bumper", car, rubber,
-                    new Vector3(0f, cfg.PaddleRadius, 0f), new Vector3(cfg.PaddleRadius * 2f, length, cfg.PaddleRadius * 2f), new Vector3(0f, 0f, 90f));
-                PrototypeMaterials.Part(PrimitiveType.Cube, "Bumper Glow", car, PrototypeMaterials.Emissive(color, 3f),
-                    new Vector3(0f, cfg.PaddleRadius * 1.15f, 0f), new Vector3(length * 1.75f, 0.07f, cfg.PaddleRadius * 2.1f));
+                var body = BuildBumperCar(car, cfg, color, rubber, out var seatPos);
+                _seats[seat] = seatPos;
 
-                // Body leans and punches; it carries the shell, seat and driver.
-                var body = new GameObject("Body").transform;
-                body.SetParent(car, false);
-                PrototypeMaterials.Part(PrimitiveType.Sphere, "Shell", body, PrototypeMaterials.Create(color, 0.85f, 0.3f),
-                    new Vector3(0f, 0.62f, -0.25f), new Vector3(2.3f, 0.6f, 1.3f));
-                PrototypeMaterials.Part(PrimitiveType.Cube, "Seat Back", body, PrototypeMaterials.Create(color * 0.55f, 0.6f),
-                    new Vector3(0f, 0.95f, -0.62f), new Vector3(0.95f, 0.65f, 0.16f));
-
-                var driver = Characters.Build(characterBySeat[seat], body);
-                driver.localPosition = new Vector3(0f, 0.72f, -0.22f);
-                driver.localScale = Vector3.one * 0.95f;
+                var driver = Characters.Build(characterBySeat[seat], body, seated: true);
+                driver.localPosition = seatPos;
+                driver.localScale = Vector3.one * 1.05f;
 
                 _cars[seat] = car;
                 _bodies[seat] = body;
@@ -113,7 +156,7 @@ namespace BOW.Game
                 if (_punch[seat] > 0f) _punch[seat] = Mathf.Max(0f, _punch[seat] - deltaTime);
                 float punch = Mathf.Sin(_punch[seat] / PunchSeconds * Mathf.PI) * 0.18f;
                 _bodies[seat].localScale = new Vector3(1f + punch, 1f - punch * 0.5f, 1f + punch);
-                _drivers[seat].localPosition = new Vector3(0f, 0.72f + Mathf.Sin(time * 5f + seat) * 0.03f, -0.22f);
+                _drivers[seat].localPosition = _seats[seat] + new Vector3(0f, Mathf.Sin(time * 5f + seat) * 0.03f, 0f);
             }
 
             float r = cfg.BallRadius;

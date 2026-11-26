@@ -62,7 +62,7 @@ namespace BOW.Game
             // Player panels: left, far and right opponents across the top; you at the bottom left.
             int left = (localSeat + 3) % 4, far = (localSeat + 2) % 4, right = (localSeat + 1) % 4;
             _panels[left] = new SeatPanel(this, root, left, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -22f));
-            _panels[far] = new SeatPanel(this, root, far, new Vector2(0.5f, 1f), new Vector2(1f, 1f), new Vector2(-160f, -22f));
+            _panels[far] = new SeatPanel(this, root, far, new Vector2(0.5f, 1f), new Vector2(1f, 1f), new Vector2(-128f, -22f));
             _panels[right] = new SeatPanel(this, root, right, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-150f, -22f));
             // Your panel and the blast button swap sides for left-handed players (US-7.5).
             bool leftHanded = SettingsStore.Current.LeftHanded;
@@ -272,6 +272,17 @@ namespace BOW.Game
             for (; row < SeatFrame.SeatCount; row++) _resultLines[row].transform.parent.gameObject.SetActive(false);
         }
 
+        /// <summary>Keeps text inside its box: it shrinks a long name or a big score instead of spilling over the frame.</summary>
+        private static Text FitText(Text text)
+        {
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.resizeTextForBestFit = true;
+            text.resizeTextMaxSize = text.fontSize;
+            text.resizeTextMinSize = Mathf.Max(10, text.fontSize / 3);
+            return text;
+        }
+
         /// <summary>One player's slanted panel: portrait ring, name, score, and life pips in Elimination.</summary>
         private sealed class SeatPanel
         {
@@ -298,7 +309,7 @@ namespace BOW.Game
                 _panelTint = Color.Lerp(Color.white, _color, 0.65f);
                 _ringTint = Color.Lerp(Color.white, _color, 0.45f);
                 bool local = seat == hud._localSeat;
-                float height = local ? 136f : 116f;
+                float height = local ? 150f : 128f;
                 var sprite = HudSprites.Panel;
                 Root = UiFactory.Rect($"Panel {SimSpace.SeatNames[seat]}", parent, anchor, pivot, position,
                     new Vector2(height * HudSprites.Aspect(sprite), height));
@@ -318,14 +329,21 @@ namespace BOW.Game
                 _ring = UiFactory.Image(UiFactory.Stretch("Frame", ring), _ringTint, HudSprites.PortraitRing);
                 _ring.raycastTarget = false;
 
-                float textLeft = ringSize * 0.32f + ringSize * 0.5f + 8f;
-                UiFactory.Text(UiFactory.Rect("Name", Root, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(textLeft, -12f), new Vector2(200f, 36f)),
+                // Text stays inside the panel's metal frame: the border is about 16% of the height top and bottom,
+                // and the slanted ends lean right, so the bottom row starts further left than the top row.
+                float panelWidth = height * HudSprites.Aspect(sprite);
+                float border = height * 0.17f;
+                float textLeft = ringSize * 0.32f + ringSize * 0.5f + 6f;
+                float scoreWidth = panelWidth * 0.2f;
+                float scoreRight = panelWidth * 0.12f;
+                float textWidth = panelWidth - textLeft - scoreRight - scoreWidth;
+                FitText(UiFactory.Text(UiFactory.Rect("Name", Root, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(textLeft + height * 0.08f, -border), new Vector2(textWidth, height * 0.34f)),
                     local ? $"YOU ({Characters.Names[hud._characters[seat]]})" : hud.Label(seat).ToUpperInvariant(),
-                    local ? 28 : 26, Color.Lerp(_color, Color.white, 0.35f), TextAnchor.MiddleLeft);
-                _status = UiFactory.Text(UiFactory.Rect("Status", Root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(textLeft - 6f, 12f), new Vector2(200f, 30f)),
-                    "", 22, new Color(1f, 1f, 1f, 0.75f), TextAnchor.MiddleLeft);
-                _score = UiFactory.Text(UiFactory.Rect("Score", Root, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-height * 0.42f, 0f), new Vector2(110f, 100f)),
-                    "0", local ? 76 : 66, Color.white, TextAnchor.MiddleRight);
+                    Mathf.RoundToInt(height * 0.27f), Color.Lerp(_color, Color.white, 0.35f), TextAnchor.MiddleLeft));
+                _status = FitText(UiFactory.Text(UiFactory.Rect("Status", Root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(textLeft - height * 0.04f, border), new Vector2(textWidth, height * 0.28f)),
+                    "", Mathf.RoundToInt(height * 0.21f), new Color(1f, 1f, 1f, 0.8f), TextAnchor.MiddleLeft));
+                _score = FitText(UiFactory.Text(UiFactory.Rect("Score", Root, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-scoreRight, 0f), new Vector2(scoreWidth, height - border * 2f)),
+                    "0", Mathf.RoundToInt(height * 0.56f), Color.white, TextAnchor.MiddleRight));
 
                 // Life pips in Elimination (when there are few enough to fit).
                 int lives = hud._sim.Settings.GoalsToEliminate;
@@ -337,7 +355,7 @@ namespace BOW.Game
                     for (int i = 0; i < lives; i++)
                     {
                         var pip = UiFactory.Rect($"Pip {i}", Root, new Vector2(0f, 0f), new Vector2(0f, 0.5f),
-                            new Vector2(textLeft - 8f + i * (width + 3f), 30f), new Vector2(width, pipHeight));
+                            new Vector2(textLeft - height * 0.04f + i * (width + 3f), border + height * 0.14f), new Vector2(width, pipHeight));
                         _pips[i] = UiFactory.Image(pip, Color.white, HudSprites.PipFull);
                         _pips[i].raycastTarget = false;
                     }
