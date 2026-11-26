@@ -13,42 +13,37 @@ namespace BOW.Game
     {
         private readonly RectTransform _root;
         private readonly Action _back;
-        private readonly Button _buy;
+        private readonly MenuButton _buy;
         private readonly Text _buyLabel, _status, _owned;
 
         public StoreMenu(Transform canvas, Action back)
         {
             _back = back;
             _root = UiFactory.Stretch("Store", canvas);
-            UiFactory.Image(_root, new Color(0f, 0f, 0f, 0.35f));
-            var box = UiFactory.Rect("Box", _root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1640f, 960f));
-            UiFactory.Image(box, MenuTheme.Panel);
-            UiFactory.Text(UiFactory.Rect("Title", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -20f), new Vector2(1000f, 90f)),
-                "STORE", 72, MenuTheme.Cyan);
+            var box = MenuStyle.ScreenBox(_root, "STORE", out _);
 
-            var card = UiFactory.Rect("Modes unlock", box, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 30f), new Vector2(1100f, 560f));
-            UiFactory.Image(card, new Color(0.07f, 0.1f, 0.16f, 0.95f));
-            var stripe = UiFactory.Rect("Stripe", card, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(1100f, 10f));
-            UiFactory.Image(stripe, MenuTheme.Cyan);
-            UiFactory.Text(UiFactory.Rect("Name", card, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1000f, 80f)),
-                "MODES UNLOCK", 60, Color.white);
+            var card = UiFactory.Rect("Modes unlock", box, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(1100f, 560f));
+            MenuStyle.Panel(card, MenuStyle.Gold);
+            MenuStyle.Heading(UiFactory.Rect("Name", card, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1000f, 80f)),
+                "MODES UNLOCK", 60, MenuStyle.Gold);
             var body = UiFactory.Text(UiFactory.Rect("Body", card, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -140f), new Vector2(960f, 250f)),
                 "Unlocks Elimination now, and every new game mode we add later.\n\n" +
                 "One payment, no ads, no currencies.\n" +
                 "When you host, everyone in your lobby can play your modes.",
-                32, new Color(1f, 1f, 1f, 0.85f), TextAnchor.UpperCenter);
+                32, MenuStyle.TextMuted, TextAnchor.UpperCenter, outline: false);
             body.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-            _buy = UiFactory.Button(card, "", new Vector2(0.5f, 0f), new Vector2(0f, 90f), new Vector2(480f, 110f), MenuTheme.ButtonGreen,
+            _buy = MenuStyle.Make(card, "Unlock", MenuIcon.Store, MenuStyle.Kind.Primary, new Vector2(0.5f, 0f), new Vector2(0f, 90f), new Vector2(560f, 110f),
                 () => PurchaseService.Buy(Products.ModesUnlock));
-            _buyLabel = _buy.GetComponentInChildren<Text>();
+            _buyLabel = _buy.Label;
             _owned = UiFactory.Text(UiFactory.Rect("Owned", card, new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), new Vector2(0f, 90f), new Vector2(600f, 80f)),
-                "OWNED - thank you!", 44, new Color(0.4f, 1f, 0.6f));
+                "OWNED - thank you!", 44, new Color(0.4f, 1f, 0.6f), TextAnchor.MiddleCenter, outline: false);
+            UiFactory.UseDisplayFont(_owned);
 
             _status = UiFactory.Text(UiFactory.Rect("Status", box, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 170f), new Vector2(1500f, 50f)),
-                "", 30, new Color(1f, 0.8f, 0.5f));
-            UiFactory.Button(box, "Back", new Vector2(0f, 0f), new Vector2(240f, 80f), new Vector2(320f, 100f), MenuTheme.ButtonGrey, Close);
-            UiFactory.Button(box, "Restore purchases", new Vector2(1f, 0f), new Vector2(-270f, 80f), new Vector2(420f, 100f), MenuTheme.ButtonGrey, PurchaseService.Restore);
+                "", 30, MenuStyle.Gold, TextAnchor.MiddleCenter, outline: false);
+            MenuStyle.BackButton(box, "Back", Close);
+            MenuStyle.Make(box, "Restore purchases", null, MenuStyle.Kind.Quiet, new Vector2(1f, 0f), new Vector2(-260f, 80f), new Vector2(420f, 96f), PurchaseService.Restore);
 
             PurchaseService.Changed += Refresh;
             EntitlementStore.Current.Changed += Refresh;
@@ -89,16 +84,16 @@ namespace BOW.Game
             switch (PurchaseService.State)
             {
                 case StoreState.Ready:
-                    _buy.interactable = price != null;
+                    _buy.Interactable = price != null;
                     _buyLabel.text = price != null ? $"Unlock for {price}" : "Not available";
                     break;
                 case StoreState.Connecting:
                 case StoreState.NotStarted:
-                    _buy.interactable = false;
+                    _buy.Interactable = false;
                     _buyLabel.text = "Loading...";
                     break;
                 default:
-                    _buy.interactable = false;
+                    _buy.Interactable = false;
                     _buyLabel.text = "Store unavailable offline";
                     break;
             }

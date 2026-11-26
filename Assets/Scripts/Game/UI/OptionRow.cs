@@ -4,17 +4,6 @@ using UnityEngine.UI;
 
 namespace BOW.Game
 {
-    /// <summary>Shared menu colours.</summary>
-    public static class MenuTheme
-    {
-        public static readonly Color Cyan = new Color(0.25f, 0.95f, 1f);
-        public static readonly Color Panel = new Color(0.03f, 0.05f, 0.09f, 0.88f);
-        public static readonly Color ButtonBlue = new Color(0.08f, 0.45f, 0.65f);
-        public static readonly Color ButtonGrey = new Color(0.18f, 0.2f, 0.26f);
-        public static readonly Color ButtonGreen = new Color(0.1f, 0.65f, 0.35f);
-        public static readonly Color ButtonRed = new Color(0.7f, 0.2f, 0.2f);
-    }
-
     /// <summary>"Label   &lt;  value  &gt;" selector row. With no step action it shows the value read-only.</summary>
     public sealed class OptionRow
     {
@@ -22,20 +11,30 @@ namespace BOW.Game
         private readonly Text _label;
         private readonly Text _value;
         private readonly Func<string> _get;
-        private readonly Button _left, _right;
+        private readonly MenuButton _left, _right;
 
         public event Action Changed;
 
+        /// <summary>
+        /// Label on the left; on the right a recessed pill holding the value, with chevron buttons at each end.
+        /// </summary>
         public OptionRow(Transform parent, string label, float x, float y, Func<string> get, Action<int> step)
         {
             _get = get;
             _root = UiFactory.Rect(label, parent, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, y), new Vector2(720f, 66f));
-            _label = UiFactory.Text(UiFactory.Rect("Label", _root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(330f, 60f)),
-                label, 32, Color.white, TextAnchor.MiddleLeft);
-            _left = UiFactory.Button(_root, "<", new Vector2(0f, 0.5f), new Vector2(370f, 0f), new Vector2(64f, 60f), MenuTheme.ButtonGrey, () => { step?.Invoke(-1); Changed?.Invoke(); });
-            _value = UiFactory.Text(UiFactory.Rect("Value", _root, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(530f, 0f), new Vector2(240f, 60f)),
-                "", 32, MenuTheme.Cyan);
-            _right = UiFactory.Button(_root, ">", new Vector2(0f, 0.5f), new Vector2(690f, 0f), new Vector2(64f, 60f), MenuTheme.ButtonGrey, () => { step?.Invoke(1); Changed?.Invoke(); });
+            _label = MenuStyle.FieldLabel(UiFactory.Rect("Label", _root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(330f, 60f)),
+                label, 32);
+
+            var pill = UiFactory.Rect("Pill", _root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(340f, 0f), new Vector2(380f, 66f));
+            MenuStyle.Recess(pill, new Color(0.02f, 0.04f, 0.08f, 0.85f)).raycastTarget = false;
+            MenuStyle.Outline(pill, new Color(0.35f, 0.5f, 0.68f, 0.45f));
+
+            var mid = new Vector2(0f, 0.5f);
+            _left = MenuStyle.Make(_root, "", MenuIcon.Back, MenuStyle.Kind.Quiet, mid, new Vector2(376f, 0f), new Vector2(64f, 56f), () => { step?.Invoke(-1); Changed?.Invoke(); });
+            _value = UiFactory.Text(UiFactory.Rect("Value", _root, mid, new Vector2(0.5f, 0.5f), new Vector2(530f, 0f), new Vector2(230f, 60f)),
+                "", 32, MenuStyle.Cyan, TextAnchor.MiddleCenter, outline: false);
+            UiFactory.UseDisplayFont(_value);
+            _right = MenuStyle.Make(_root, "", MenuIcon.Next, MenuStyle.Kind.Quiet, mid, new Vector2(684f, 0f), new Vector2(64f, 56f), () => { step?.Invoke(1); Changed?.Invoke(); });
             SetEditable(step != null);
         }
 

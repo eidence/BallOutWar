@@ -13,6 +13,21 @@ namespace BOW.Game
 
         public static Font Font => _font != null ? _font : (_font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
 
+        private static Font _displayFont;
+
+        /// <summary>
+        /// The chunky display face for headings, buttons and the HUD's numbers: Lilita One (SIL Open Font License,
+        /// see Resources/Fonts/LilitaOne-OFL.txt). Falls back to the body font if it's missing.
+        /// </summary>
+        public static Font DisplayFont => _displayFont != null ? _displayFont : (_displayFont = Resources.Load<Font>("Fonts/LilitaOne-Regular") ?? Font);
+
+        /// <summary>Sets a label in the display face, leaning forward like the rest of the UI. The face is already heavy, so no fake bold.</summary>
+        public static void UseDisplayFont(Text text)
+        {
+            text.font = DisplayFont;
+            text.fontStyle = FontStyle.Italic;
+        }
+
         public static Canvas CreateCanvas(string name, int sortingOrder)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -106,9 +121,14 @@ namespace BOW.Game
             InputField.ContentType type = InputField.ContentType.Standard, int maxLength = 32)
         {
             var rt = UiFactory.Rect("Input", parent, anchor, new Vector2(0.5f, 0.5f), position, size);
-            var background = UiFactory.Image(rt, new Color(0.1f, 0.12f, 0.17f, 0.95f));
+            var background = MenuStyle.Recess(rt, new Color(0.02f, 0.04f, 0.08f, 0.9f));
+            MenuStyle.Outline(rt, new Color(0.35f, 0.5f, 0.68f, 0.6f));
             var input = rt.gameObject.AddComponent<InputField>();
             input.targetGraphic = background;
+            var colors = input.colors;
+            colors.highlightedColor = new Color(1.4f, 1.4f, 1.4f, 1f);
+            colors.selectedColor = new Color(1.6f, 1.6f, 1.6f, 1f);
+            input.colors = colors;
 
             int fontSize = Mathf.RoundToInt(size.y * 0.45f);
             var textRect = UiFactory.Stretch("Text", rt);

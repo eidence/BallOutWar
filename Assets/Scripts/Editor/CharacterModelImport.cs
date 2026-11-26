@@ -15,6 +15,17 @@ namespace BOW.Editor
         /// <summary>Car paint textures: 1024 px is plenty for a car on a phone screen.</summary>
         private void OnPreprocessTexture()
         {
+            if (assetPath.StartsWith("Assets/Resources/UI/Menu/"))
+            {
+                // Menu art (the logo): a single UI sprite at full quality, never squashed to a power of two.
+                var ui = (TextureImporter)assetImporter;
+                ui.textureType = TextureImporterType.Sprite;
+                ui.spriteImportMode = SpriteImportMode.Single;
+                ui.alphaIsTransparency = true;
+                ui.mipmapEnabled = false;
+                ui.maxTextureSize = 2048;
+                return;
+            }
             bool car = assetPath.StartsWith("Assets/Resources/Cars/");
             bool character = assetPath.StartsWith(Folder);
             if (!car && !character) return;

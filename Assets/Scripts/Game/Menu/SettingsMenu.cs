@@ -18,14 +18,10 @@ namespace BOW.Game
         {
             _back = back;
             _root = UiFactory.Stretch("Settings", canvas);
-            UiFactory.Image(_root, new Color(0f, 0f, 0f, 0.35f));
-            var box = UiFactory.Rect("Box", _root, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1640f, 960f));
-            UiFactory.Image(box, MenuTheme.Panel);
-            UiFactory.Text(UiFactory.Rect("Title", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -20f), new Vector2(1000f, 90f)),
-                "SETTINGS", 72, MenuTheme.Cyan);
+            var box = MenuStyle.ScreenBox(_root, "SETTINGS", out _);
 
             var s = SettingsStore.Current;
-            float left = 60f, right = 880f, top = -150f, step = 90f;
+            float left = 60f, right = 880f, top = -170f, step = 90f;
 
             Add(new OptionRow(box, "Volume", left, top, () => Bar(s.MasterVolume), d => s.MasterVolume = Mathf.Clamp(s.MasterVolume + d, 0, GameSettings.MaxVolume)));
             Add(new OptionRow(box, "Sound effects", left, top - step, () => Bar(s.EffectsVolume), d => s.EffectsVolume = Mathf.Clamp(s.EffectsVolume + d, 0, GameSettings.MaxVolume)));
@@ -37,18 +33,18 @@ namespace BOW.Game
             Add(new OptionRow(box, "Frame rate", right, top - step, () => $"{s.FrameRate} fps", d => s.FrameRate = s.FrameRate == 60 ? 30 : 60));
             Add(new OptionRow(box, "Blast button", right, top - step * 2f, () => s.LeftHanded ? "Left side" : "Right side", d => s.LeftHanded = !s.LeftHanded));
 
-            UiFactory.Text(UiFactory.Rect("Name label", box, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(right, top - step * 3f), new Vector2(330f, 60f)),
-                "Player name", 32, Color.white, TextAnchor.MiddleLeft);
-            _name = UiInput.Create(box, new Vector2(0f, 1f), new Vector2(right + 545f, top - step * 3f - 33f), new Vector2(390f, 66f), "Your name",
+            MenuStyle.FieldLabel(UiFactory.Rect("Name label", box, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(right, top - step * 3f), new Vector2(330f, 60f)),
+                "Player name", 32);
+            _name = UiInput.Create(box, new Vector2(0f, 1f), new Vector2(right + 530f, top - step * 3f - 33f), new Vector2(380f, 66f), "Your name",
                 ProfileStore.Load().PlayerName, maxLength: NetProtocol.MaxNameLength);
             _name.onEndEdit.AddListener(SaveName);
 
             var note = UiFactory.Rect("Note", box, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 190f), new Vector2(1500f, 90f));
             var noteText = UiFactory.Text(note, "Graphics: Low saves battery on older phones. Auto picks the best level for this device.", 28,
-                new Color(1f, 1f, 1f, 0.6f));
+                MenuStyle.TextMuted, TextAnchor.MiddleCenter, outline: false);
             noteText.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-            UiFactory.Button(box, "Back", new Vector2(0f, 0f), new Vector2(240f, 80f), new Vector2(320f, 100f), MenuTheme.ButtonGrey, Close);
+            MenuStyle.BackButton(box, "Back", Close);
             _root.gameObject.SetActive(false);
         }
 
@@ -78,7 +74,6 @@ namespace BOW.Game
             row.Changed += () =>
             {
                 SettingsStore.Apply();
-                GameAudio.Play(Sfx.Click);
                 foreach (var r in _rows) r.Refresh();
             };
         }

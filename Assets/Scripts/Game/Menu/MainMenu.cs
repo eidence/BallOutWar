@@ -15,22 +15,26 @@ namespace BOW.Game
     /// </summary>
     public sealed class MainMenu : MonoBehaviour
     {
-        private static readonly Color Cyan = MenuTheme.Cyan;
-        private static readonly Color Panel = MenuTheme.Panel;
-        private static readonly Color ButtonBlue = MenuTheme.ButtonBlue;
-        private static readonly Color ButtonGrey = MenuTheme.ButtonGrey;
 
-        private enum MenuScreen { Main, Setup, ExitConfirm, Lan, Settings, Store, Resume }
+        private enum MenuScreen { Main, Setup, Rules, ExitConfirm, Lan, Settings, Store, Resume }
 
         private MatchLaunchConfig _config;
         private PortraitStudio _studio;
         private MenuBackdrop _backdrop;
         private RectTransform _main, _setup, _exit;
+        private MenuLogo _logo;
+        private bool _mainShown;
+        private readonly List<MenuButton> _mainButtons = new List<MenuButton>();
         private MenuScreen _screen;
         private readonly List<OptionRow> _rows = new List<OptionRow>();
         private readonly Image[] _characterRings = new Image[Characters.Count];
-        private Text _characterName;
-        private readonly OptionRow[] _opponentRows = new OptionRow[SeatFrame.SeatCount];
+        private readonly Image[] _cardRims = new Image[Characters.Count];
+        private readonly Text[] _cardNames = new Text[Characters.Count];
+        private readonly MenuChip[] _modeChips = new MenuChip[2];
+        private readonly MenuChip[] _opponentChips = new MenuChip[3];
+        private readonly MenuChip[] _levelChips = new MenuChip[4];
+        private MenuButton _rulesButton;
+        private RectTransform _rules;
         private OptionRow _durationRow, _goalsRow, _tieRow;
         private LanMenu _lan;
         private SettingsMenu _settings;
@@ -75,6 +79,7 @@ namespace BOW.Game
             switch (_screen)
             {
                 case MenuScreen.Setup: Show(MenuScreen.Main); break;
+                case MenuScreen.Rules: Show(MenuScreen.Setup); break;
                 case MenuScreen.Main: Show(MenuScreen.ExitConfirm); break;
                 case MenuScreen.ExitConfirm: Show(MenuScreen.Main); break;
                 case MenuScreen.Lan: _lan.Back(); break;
@@ -93,7 +98,7 @@ namespace BOW.Game
 
         private void OnEntitlementsChanged()
         {
-            if (_screen == MenuScreen.Setup) RefreshSetup();
+            if (_screen == MenuScreen.Setup || _screen == MenuScreen.Rules) RefreshSetup();
         }
 
         private void OpenStore(MenuScreen returnTo, string reason = null)
@@ -113,9 +118,15 @@ namespace BOW.Game
 
         private void Show(MenuScreen screen)
         {
+            // The main screen stays visible behind its own dialogs (exit, resume); its entrance plays when it appears.
+            bool mainVisible = screen == MenuScreen.Main || screen == MenuScreen.ExitConfirm || screen == MenuScreen.Resume;
+            bool appearing = mainVisible && !_mainShown;
+            _mainShown = mainVisible;
             _screen = screen;
-            _main.gameObject.SetActive(screen == MenuScreen.Main);
-            _setup.gameObject.SetActive(screen == MenuScreen.Setup);
+            _main.gameObject.SetActive(mainVisible);
+            if (appearing) PlayMainIntro();
+            _setup.gameObject.SetActive(screen == MenuScreen.Setup || screen == MenuScreen.Rules);
+            _rules.gameObject.SetActive(screen == MenuScreen.Rules);
             _exit.gameObject.SetActive(screen == MenuScreen.ExitConfirm);
             if (screen == MenuScreen.Lan) _lan.Show();
             else if (_lan != null) _lan.Hide();
@@ -125,47 +136,81 @@ namespace BOW.Game
             else _store?.Hide();
             if (_resumePanel != null) _resumePanel.gameObject.SetActive(screen == MenuScreen.Resume);
             if (screen == MenuScreen.Resume) RefreshResume();
-            if (screen == MenuScreen.Setup) RefreshSetup();
+            if (screen == MenuScreen.Setup || screen == MenuScreen.Rules) RefreshSetup();
         }
 
         // ----- Main menu -----
 
+        /// <summary>
+        /// Logo and a column of buttons down the left, over a dark fade; the live demo match plays on the right.
+        /// Play Solo is the hero action (gold, glowing); Settings and Exit sit in a smaller row at the bottom.
+        /// </summary>
         private void BuildMain(Transform canvas)
         {
             _main = UiFactory.Stretch("Main", canvas);
+            MenuStyle.LeftFade(_main, 1150f, 0.85f);
 
-            var title = UiFactory.Rect("Title", _main, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1400f, 180f));
-            UiFactory.Text(title, "BALL OUT WAR", 150, Cyan);
-            var tag = UiFactory.Rect("Tagline", _main, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -205f), new Vector2(1400f, 60f));
-            UiFactory.Text(tag, "Defend your goal. Blast the rest.", 40, Color.white);
+            var topLeft = new Vector2(0f, 1f);
+            const float left = 64f, width = 600f;
 
-            var column = UiFactory.Rect("Buttons", _main, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(80f, -60f), new Vector2(560f, 760f));
-            float y = 276f; // six buttons, centred in the column
-            void Add(string label, bool enabled, Color color, Action onClick)
+            var logoSprite = MenuStyle.Logo;
+            var logo = UiFactory.Rect("Logo", _main, topLeft, new Vector2(0.5f, 0.5f), new Vector2(left + width * 0.5f, -190f), new Vector2(660f, 330f));
+            if (logoSprite != null)
             {
-                var b = UiFactory.Button(column, label, new Vector2(0.5f, 0.5f), new Vector2(0f, y), new Vector2(540f, 92f), color, onClick);
-                b.interactable = enabled;
-                y -= 108f;
+                var image = logo.gameObject.AddComponent<Image>();
+                image.sprite = logoSprite;
+                image.preserveAspect = true;
+                image.raycastTarget = false;
+            }
+            else MenuStyle.Heading(logo, "BALL OUT WAR", 96, MenuStyle.Gold);
+            _logo = logo.gameObject.AddComponent<MenuLogo>();
+
+            _mainButtons.Clear();
+            float y = -388f;
+            MenuButton Add(string label, MenuIcon icon, Color accent, float glow, float height, Action onClick)
+            {
+                var b = MenuStyle.Button(_main, label, icon, accent, topLeft, topLeft, new Vector2(left, y), new Vector2(width, height), glow, onClick);
+                _mainButtons.Add(b);
+                y -= height + 18f;
+                return b;
             }
 
-            Add("Play Solo", true, ButtonBlue, () => Show(MenuScreen.Setup));
-            Add("Play Local", true, ButtonBlue, () => Show(MenuScreen.Lan));
-            Add("Play Online  (soon)", false, ButtonGrey, () => { });
-            Add("Store", true, ButtonBlue, () => OpenStore(MenuScreen.Main));
-            Add("Settings", true, ButtonBlue, () => Show(MenuScreen.Settings));
-            Add("Exit", true, ButtonGrey, () => Show(MenuScreen.ExitConfirm));
+            Add("Play Solo", MenuIcon.Play, MenuStyle.Gold, 0.6f, 112f, () => Show(MenuScreen.Setup)).Pulse = true;
+            Add("Play Local", MenuIcon.Local, MenuStyle.Cyan, 0.22f, 100f, () => Show(MenuScreen.Lan));
+            var online = Add("Play Online", MenuIcon.Online, MenuStyle.Cyan, 0f, 100f, () => { });
+            online.Interactable = false;
+            online.Tag("SOON", MenuStyle.Gold);
+            Add("Store", MenuIcon.Store, MenuStyle.Cyan, 0.22f, 100f, () => OpenStore(MenuScreen.Main));
+
+            // Secondary row: two half-width buttons.
+            y -= 8f;
+            float half = (width - 18f) * 0.5f;
+            var muted = new Color(0.55f, 0.68f, 0.82f);
+            _mainButtons.Add(MenuStyle.Button(_main, "Settings", MenuIcon.Settings, muted, topLeft, topLeft, new Vector2(left, y), new Vector2(half, 84f), 0f,
+                () => Show(MenuScreen.Settings)));
+            _mainButtons.Add(MenuStyle.Button(_main, "Exit", MenuIcon.Exit, muted, topLeft, topLeft, new Vector2(left + half + 18f, y), new Vector2(half, 84f), 0f,
+                () => Show(MenuScreen.ExitConfirm)));
+
+            var version = UiFactory.Rect("Version", _main, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-36f, 24f), new Vector2(500f, 40f));
+            var versionText = UiFactory.Text(version, "v" + Application.version, 24, new Color(1f, 1f, 1f, 0.45f), TextAnchor.LowerRight, outline: false);
+            versionText.fontStyle = FontStyle.Italic;
+        }
+
+        /// <summary>Replays the logo and button entrance whenever the main screen opens.</summary>
+        private void PlayMainIntro()
+        {
+            _logo.Intro();
+            for (int i = 0; i < _mainButtons.Count; i++) _mainButtons[i].Intro(0.12f + i * 0.055f);
         }
 
         private void BuildExitConfirm(Transform canvas)
         {
             _exit = UiFactory.Stretch("Exit Confirm", canvas);
-            UiFactory.Image(_exit, new Color(0f, 0f, 0f, 0.6f));
-            var box = UiFactory.Rect("Box", _exit, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(900f, 420f));
-            UiFactory.Image(box, Panel);
-            UiFactory.Text(UiFactory.Rect("Question", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -50f), new Vector2(860f, 120f)),
-                "Exit Ball Out War?", 64, Color.white);
-            UiFactory.Button(box, "Exit", new Vector2(0.5f, 0f), new Vector2(-180f, 110f), new Vector2(320f, 100f), new Color(0.7f, 0.2f, 0.2f), ExitGame);
-            UiFactory.Button(box, "Cancel", new Vector2(0.5f, 0f), new Vector2(180f, 110f), new Vector2(320f, 100f), ButtonGrey, () => Show(MenuScreen.Main));
+            var box = MenuStyle.Dialog(_exit, new Vector2(900f, 400f), MenuStyle.Cyan, "Leave Ball Out War?", Color.white);
+            var bottom = new Vector2(0.5f, 0f);
+            var centre = new Vector2(0.5f, 0.5f);
+            MenuStyle.Button(box, "Exit", MenuIcon.Exit, MenuStyle.Red, bottom, centre, new Vector2(-190f, 105f), new Vector2(340f, 100f), 0.3f, ExitGame);
+            MenuStyle.Button(box, "Stay", null, MenuStyle.Cyan, bottom, centre, new Vector2(190f, 105f), new Vector2(340f, 100f), 0.3f, () => Show(MenuScreen.Main));
         }
 
         // ----- Offline resume (TDD 9.4, US-6.6) -----
@@ -173,15 +218,13 @@ namespace BOW.Game
         private void BuildResume(Transform canvas)
         {
             _resumePanel = UiFactory.Stretch("Resume", canvas);
-            UiFactory.Image(_resumePanel, new Color(0f, 0f, 0f, 0.6f));
-            var box = UiFactory.Rect("Box", _resumePanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1000f, 480f));
-            UiFactory.Image(box, Panel);
-            UiFactory.Text(UiFactory.Rect("Question", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(940f, 90f)),
-                "Resume your match?", 64, Cyan);
+            var box = MenuStyle.Dialog(_resumePanel, new Vector2(1000f, 480f), MenuStyle.Gold, "Resume your match?", MenuStyle.Gold);
             _resumeDetails = UiFactory.Text(UiFactory.Rect("Details", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -150f), new Vector2(940f, 120f)),
-                "", 34, Color.white);
-            UiFactory.Button(box, "Resume", new Vector2(0.5f, 0f), new Vector2(-200f, 100f), new Vector2(340f, 100f), MenuTheme.ButtonGreen, ResumeMatch);
-            UiFactory.Button(box, "Discard", new Vector2(0.5f, 0f), new Vector2(200f, 100f), new Vector2(340f, 100f), ButtonGrey, DiscardResume);
+                "", 34, MenuStyle.TextMuted, TextAnchor.MiddleCenter, outline: false);
+            var bottom = new Vector2(0.5f, 0f);
+            var centre = new Vector2(0.5f, 0.5f);
+            MenuStyle.Button(box, "Resume", MenuIcon.Play, MenuStyle.Gold, bottom, centre, new Vector2(-200f, 105f), new Vector2(360f, 104f), 0.5f, ResumeMatch).Pulse = true;
+            MenuStyle.Button(box, "Discard", null, new Color(0.55f, 0.68f, 0.82f), bottom, centre, new Vector2(200f, 105f), new Vector2(340f, 104f), 0f, DiscardResume);
             _resumePanel.gameObject.SetActive(false);
         }
 
@@ -222,106 +265,163 @@ namespace BOW.Game
 
         // ----- Solo setup -----
 
+        private static readonly Color CardFill = new Color(0.03f, 0.05f, 0.1f, 0.9f);
+        private static readonly Color CardRim = new Color(0.35f, 0.5f, 0.68f, 0.4f);
+
+        /// <summary>
+        /// One panel along the bottom, with the demo match still playing above it: four driver cards, a single row of
+        /// choices (mode, opponents, AI level) that are all on show, and START. The finer rules (match length, balls,
+        /// tie-break) sit behind the Rules button, since most players never change them.
+        /// </summary>
         private void BuildSetup(Transform canvas)
         {
             _setup = UiFactory.Stretch("Setup", canvas);
-            UiFactory.Image(_setup, new Color(0f, 0f, 0f, 0.35f));
-            var box = UiFactory.Rect("Box", _setup, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1640f, 960f));
-            UiFactory.Image(box, Panel);
-            UiFactory.Text(UiFactory.Rect("Title", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -20f), new Vector2(1000f, 90f)),
-                "SOLO MATCH", 72, Cyan);
+            UiFactory.Image(_setup, new Color(0.01f, 0.02f, 0.05f, 0.3f));
+            // Full height, 28 px clear of the screen edges; everything inside keeps 40 px between blocks.
+            var panel = UiFactory.Rect("Panel", _setup, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1800f, -56f));
+            panel.anchorMin = new Vector2(0.5f, 0f);
+            panel.anchorMax = new Vector2(0.5f, 1f);
+            MenuStyle.Panel(panel, MenuStyle.Cyan);
+            var topLeft = new Vector2(0f, 1f);
 
-            // Character picker (US-1.4).
-            UiFactory.Text(UiFactory.Rect("Pick", box, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(60f, -120f), new Vector2(600f, 50f)),
-                "Choose your driver", 36, Color.white, TextAnchor.MiddleLeft);
+            MenuStyle.Heading(UiFactory.Rect("Heading", panel, topLeft, topLeft, new Vector2(50f, -30f), new Vector2(900f, 70f)),
+                "CHOOSE YOUR DRIVER", 50, Color.white, TextAnchor.MiddleLeft);
+            _lockNote = UiFactory.Text(UiFactory.Rect("Lock note", panel, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-50f, -30f), new Vector2(800f, 70f)),
+                "", 26, MenuStyle.Gold, TextAnchor.MiddleRight, outline: false);
+            _lockNote.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            // Driver cards (US-1.4).
             for (int c = 0; c < Characters.Count; c++)
             {
                 int character = c;
-                var slot = UiFactory.Rect(Characters.Names[c], box, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(60f + c * 190f, -180f), new Vector2(170f, 170f));
-                _characterRings[c] = UiFactory.Image(slot, Color.gray, ProceduralTextures.Circle());
-                var button = slot.gameObject.AddComponent<Button>();
-                button.targetGraphic = _characterRings[c];
-                button.onClick.AddListener(() => { _config.PlayerCharacter = character; RefreshSetup(); });
-                var mask = UiFactory.Rect("Mask", slot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(150f, 150f));
-                UiFactory.Image(mask, Color.white, ProceduralTextures.Circle()).raycastTarget = false;
-                mask.gameObject.AddComponent<Mask>().showMaskGraphic = false;
-                var portrait = UiFactory.Stretch("Portrait", mask).gameObject.AddComponent<RawImage>();
-                portrait.texture = _studio.Portraits[c];
-                portrait.raycastTarget = false;
-            }
-            _characterName = UiFactory.Text(UiFactory.Rect("Name", box, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(60f, -360f), new Vector2(760f, 50f)),
-                "", 34, Color.white, TextAnchor.MiddleLeft);
+                // Cards fill the height between the heading and the choices; the portrait grows with them.
+                var card = UiFactory.Rect(Characters.Names[c], panel, topLeft, topLeft, Vector2.zero, Vector2.zero);
+                card.anchorMin = new Vector2(0f, 0f);
+                card.anchorMax = new Vector2(0f, 1f);
+                card.offsetMin = new Vector2(50f + c * 430f, 276f);
+                card.offsetMax = new Vector2(50f + c * 430f + 410f, -140f);
+                var fill = MenuStyle.Recess(card, CardFill, 1.2f);
+                _cardRims[c] = MenuStyle.Outline(card, CardRim, 1.2f);
+                var button = card.gameObject.AddComponent<Button>();
+                button.targetGraphic = fill;
+                var colors = button.colors;
+                colors.highlightedColor = new Color(1.4f, 1.4f, 1.4f, 1f);
+                colors.selectedColor = Color.white;
+                colors.pressedColor = new Color(1.8f, 1.8f, 1.8f, 1f);
+                button.colors = colors;
+                button.onClick.AddListener(() => { GameAudio.Play(Sfx.Click); _config.PlayerCharacter = character; RefreshSetup(); });
 
-            // Match options (left column) and opponents (right column).
-            float leftX = 60f, rightX = 880f, top = -440f, step = 78f;
-            _rows.Add(new OptionRow(box, "Mode", leftX, top,
-                () => _config.Mode == GameMode.Timed ? "Timed" : "Elimination",
-                d => _config.Mode = _config.Mode == GameMode.Timed ? GameMode.Elimination : GameMode.Timed));
-            _rows.Add(_durationRow = new OptionRow(box, "Match length", leftX, top - step,
+                var ring = UiFactory.Stretch("Ring", card);
+                ring.offsetMin = new Vector2(24f, 92f);
+                ring.offsetMax = new Vector2(-24f, -24f);
+                var fit = ring.gameObject.AddComponent<AspectRatioFitter>();
+                fit.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+                fit.aspectRatio = 1f;
+                _characterRings[c] = MenuStyle.PortraitFrame(ring, _studio.Portraits[c], MenuStyle.RingColor(false), out _);
+
+                _cardNames[c] = MenuStyle.Heading(UiFactory.Rect("Name", card, new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), new Vector2(0f, 48f), new Vector2(380f, 64f)),
+                    Characters.Names[c], 44, Color.white);
+            }
+
+            // One row of choices, every option visible, spanning the same width as the cards.
+            var choices = UiFactory.Rect("Choices", panel, new Vector2(0f, 0f), new Vector2(0f, 0.5f), new Vector2(0f, 206f), new Vector2(1800f, 60f));
+            panel = choices;
+            const float row = -30f, chipH = 60f, gap = 8f;
+            MenuStyle.Caption(panel, "MODE", 50f, row, 90f);
+            _modeChips[0] = new MenuChip(panel, "TIMED", 150f, row, 150f, chipH, () => SetMode(GameMode.Timed));
+            _modeChips[1] = new MenuChip(panel, "ELIMINATION", 150f + 150f + gap, row, 210f, chipH, () => SetMode(GameMode.Elimination));
+
+            MenuStyle.Caption(panel, "OPPONENTS", 587f, row, 170f);
+            for (int n = 0; n < _opponentChips.Length; n++)
+            {
+                int count = n + 1;
+                _opponentChips[n] = new MenuChip(panel, count.ToString(), 767f + n * (64f + gap), row, 64f, chipH,
+                    () => { _config.Opponents = count; RefreshSetup(); });
+            }
+
+            MenuStyle.Caption(panel, "AI LEVEL", 1044f, row, 140f);
+            float[] levelWidths = { 116f, 150f, 116f, 150f };
+            float x = 1194f;
+            for (int l = 0; l < _levelChips.Length; l++)
+            {
+                var level = (AIDifficulty)l;
+                _levelChips[l] = new MenuChip(panel, level.ToString().ToUpperInvariant(), x, row, levelWidths[l], chipH, () =>
+                {
+                    for (int i = 0; i < _config.Difficulty.Length; i++) _config.Difficulty[i] = level;
+                    RefreshSetup();
+                });
+                x += levelWidths[l] + gap;
+            }
+
+            // Bottom row, 50 px in from each side, all centred on one line: Back, the rules summary (opens the rules), START.
+            panel = (RectTransform)choices.parent;
+            var back = MenuStyle.BackButton(panel, "Back", () => Show(MenuScreen.Main));
+            ((RectTransform)back.transform).anchoredPosition = new Vector2(200f, 82f);
+            _rulesButton = MenuStyle.Make(panel, "Rules", MenuIcon.Settings, MenuStyle.Kind.Quiet, new Vector2(0f, 0f), new Vector2(760f, 82f), new Vector2(760f, 96f),
+                () => Show(MenuScreen.Rules));
+            _rulesButton.Label.resizeTextMaxSize = 34; // one line, never wrapped
+            MenuStyle.Make(panel, "START", MenuIcon.Play, MenuStyle.Kind.Primary, new Vector2(1f, 0f), new Vector2(-240f, 82f), new Vector2(380f, 108f), StartSolo);
+
+            BuildRules(canvas);
+        }
+
+        /// <summary>The rarely-changed match rules, in a dialog over the setup panel.</summary>
+        private void BuildRules(Transform canvas)
+        {
+            _rules = UiFactory.Stretch("Rules", canvas);
+            var box = MenuStyle.Dialog(_rules, new Vector2(1000f, 560f), MenuStyle.Cyan, "MATCH RULES", Color.white, 56);
+            float x = 140f, top = -175f, step = 84f;
+            _rows.Add(_durationRow = new OptionRow(box, "Match length", x, top,
                 () => $"{_config.DurationSeconds / 60f:0} min",
                 d => _config.DurationSeconds = Cycle(MatchLaunchConfig.DurationOptions, _config.DurationSeconds, d)));
-            _rows.Add(_goalsRow = new OptionRow(box, "Goals to knock out", leftX, top - step,
+            _rows.Add(_goalsRow = new OptionRow(box, "Goals to knock out", x, top,
                 () => _config.GoalsToEliminate.ToString(),
                 d => _config.GoalsToEliminate = Wrap(_config.GoalsToEliminate + d, MatchSettings.MinGoalsToEliminate, MatchSettings.MaxGoalsToEliminate)));
-            _rows.Add(new OptionRow(box, "Balls", leftX, top - step * 2f,
+            _rows.Add(new OptionRow(box, "Balls", x, top - step,
                 () => _config.BallCount.ToString(),
                 d => _config.BallCount = Wrap(_config.BallCount + d, MatchSettings.MinBalls, MatchSettings.MaxBalls)));
-            _rows.Add(_tieRow = new OptionRow(box, "On a tie", leftX, top - step * 3f,
+            _rows.Add(_tieRow = new OptionRow(box, "On a tie", x, top - step * 2f,
                 () => _config.TieRule == TieRule.SuddenDeath ? "Sudden death" : "Draw",
                 d => _config.TieRule = _config.TieRule == TieRule.SuddenDeath ? TieRule.AllowDraw : TieRule.SuddenDeath));
+            MenuStyle.Make(box, "Done", null, MenuStyle.Kind.Secondary, new Vector2(0.5f, 0f), new Vector2(0f, 90f), new Vector2(320f, 96f), () => Show(MenuScreen.Setup));
+            foreach (var r in _rows) r.Changed += RefreshSetup;
+            _rules.gameObject.SetActive(false);
+        }
 
-            _rows.Add(new OptionRow(box, "Opponents", rightX, top,
-                () => _config.Opponents.ToString(),
-                d => _config.Opponents = Wrap(_config.Opponents + d, 1, 3)));
-            _rows.Add(new OptionRow(box, "All AI", rightX, top - step,
-                () => "Set all",
-                d =>
-                {
-                    var level = (AIDifficulty)Wrap((int)_config.Difficulty[1] + d, 0, 3);
-                    for (int i = 0; i < _config.Difficulty.Length; i++) _config.Difficulty[i] = level;
-                }));
-            for (int seat = 1; seat < SeatFrame.SeatCount; seat++)
-            {
-                int s = seat;
-                _opponentRows[s] = new OptionRow(box, "", rightX, top - step * (1 + s),
-                    () => _config.Difficulty[s].ToString(),
-                    d => _config.Difficulty[s] = (AIDifficulty)Wrap((int)_config.Difficulty[s] + d, 0, 3));
-                _rows.Add(_opponentRows[s]);
-            }
-
-            UiFactory.Button(box, "Back", new Vector2(0f, 0f), new Vector2(240f, 80f), new Vector2(320f, 100f), ButtonGrey, () => Show(MenuScreen.Main));
-            UiFactory.Button(box, "START", new Vector2(1f, 0f), new Vector2(-240f, 80f), new Vector2(360f, 110f), new Color(0.1f, 0.65f, 0.35f), StartSolo);
-            // Between Back and START, clear of the option rows.
-            _lockNote = UiFactory.Text(UiFactory.Rect("Lock note", box, new Vector2(0.5f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-40f, 80f), new Vector2(620f, 110f)),
-                "", 26, new Color(1f, 0.8f, 0.5f));
-            _lockNote.horizontalOverflow = HorizontalWrapMode.Wrap;
-
-            foreach (var row in _rows) row.Changed += RefreshSetup;
+        private void SetMode(GameMode mode)
+        {
+            _config.Mode = mode;
+            RefreshSetup();
         }
 
         private void RefreshSetup()
         {
             _config.Sanitise();
             for (int c = 0; c < Characters.Count; c++)
-                _characterRings[c].color = c == _config.PlayerCharacter ? Cyan : new Color(0.25f, 0.28f, 0.35f);
-            _characterName.text = $"{Characters.Names[_config.PlayerCharacter]}  -  {Characters.Descriptions[_config.PlayerCharacter]}";
+            {
+                bool picked = c == _config.PlayerCharacter;
+                _characterRings[c].color = MenuStyle.RingColor(picked);
+                _cardRims[c].color = picked ? MenuStyle.Gold : CardRim;
+                _cardNames[c].color = picked ? MenuStyle.Gold : Color.white;
+            }
 
             bool timed = _config.Mode == GameMode.Timed;
+            _modeChips[0].SetOn(timed);
+            _modeChips[1].SetOn(!timed);
+            for (int n = 0; n < _opponentChips.Length; n++) _opponentChips[n].SetOn(_config.Opponents == n + 1);
+            for (int l = 0; l < _levelChips.Length; l++) _levelChips[l].SetOn((int)_config.Difficulty[1] == l);
+
             _durationRow.SetVisible(timed);
             _tieRow.SetVisible(timed);
             _goalsRow.SetVisible(!timed);
-            string note = EntitlementStore.SoloNote(_config.Mode);
-            _lockNote.text = note ?? "";
-
-            bool[] active = _config.ActiveSeats();
-            int[] characters = _config.CharactersBySeat();
-            for (int seat = 1; seat < SeatFrame.SeatCount; seat++)
-            {
-                _opponentRows[seat].SetVisible(active[seat]);
-                _opponentRows[seat].SetLabel($"vs {Characters.Names[characters[seat]]}");
-            }
-            foreach (var row in _rows) row.Refresh();
+            _lockNote.text = EntitlementStore.SoloNote(_config.Mode) ?? "";
+            _rulesButton.Label.text = timed
+                ? $"{_config.DurationSeconds / 60f:0} min · {Plural(_config.BallCount, "ball")} · {(_config.TieRule == TieRule.SuddenDeath ? "sudden death" : "draws")}"
+                : $"{Plural(_config.GoalsToEliminate, "goal")} out · {Plural(_config.BallCount, "ball")}";
+            foreach (var r in _rows) r.Refresh();
         }
+
+        private static string Plural(int n, string word) => n == 1 ? $"1 {word}" : $"{n} {word}s";
 
         private void StartSolo()
         {

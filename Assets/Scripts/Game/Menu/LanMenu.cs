@@ -24,7 +24,7 @@ namespace BOW.Game
 
         // Browse
         private readonly InputField _name, _address;
-        private readonly Button[] _matchButtons = new Button[ListRows];
+        private readonly MenuButton[] _matchButtons = new MenuButton[ListRows];
         private readonly Text[] _matchLabels = new Text[ListRows];
         private readonly Text _emptyList, _browseStatus;
         private readonly List<FoundMatch> _shown = new List<FoundMatch>();
@@ -35,7 +35,7 @@ namespace BOW.Game
         private readonly SeatRow[] _seats = new SeatRow[SeatFrame.SeatCount];
         private readonly Image[] _characterRings = new Image[Characters.Count];
         private readonly OptionRow _modeRow, _lengthRow, _goalsRow, _ballsRow;
-        private readonly Button _start, _ready;
+        private readonly MenuButton _start, _ready;
         private readonly Text _readyLabel;
         private float _noticeTime;
 
@@ -49,61 +49,59 @@ namespace BOW.Game
 
             // ---------------- Browse ----------------
             _browse = UiFactory.Stretch("Play Local", canvas);
-            UiFactory.Image(_browse, new Color(0f, 0f, 0f, 0.35f));
             var box = Box(_browse, "PLAY ON LOCAL WI-FI");
 
-            Label(box, "Your name", 60f, -140f, 300f);
-            _name = UiInput.Create(box, new Vector2(0f, 1f), new Vector2(620f, -165f), new Vector2(520f, 76f), "Your name", profile.PlayerName,
+            Label(box, "Your name", 60f, -150f, 300f);
+            _name = UiInput.Create(box, new Vector2(0f, 1f), new Vector2(620f, -175f), new Vector2(520f, 76f), "Your name", profile.PlayerName,
                 maxLength: NetProtocol.MaxNameLength);
             _name.onEndEdit.AddListener(SaveName);
 
-            UiFactory.Button(box, "Host a game", new Vector2(0f, 1f), new Vector2(330f, -330f), new Vector2(540f, 120f), MenuTheme.ButtonGreen, Host);
+            MenuStyle.Make(box, "Host a game", MenuIcon.Play, MenuStyle.Kind.Primary, new Vector2(0f, 1f), new Vector2(330f, -330f), new Vector2(540f, 116f), Host);
             var hint = UiFactory.Rect("Host hint", box, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(60f, -410f), new Vector2(560f, 140f));
-            var hintText = UiFactory.Text(hint, "Players on the same Wi-Fi or phone hotspot will see your game. No internet needed.", 28, new Color(1f, 1f, 1f, 0.7f), TextAnchor.UpperLeft);
+            var hintText = UiFactory.Text(hint, "Players on the same Wi-Fi or phone hotspot will see your game. No internet needed.", 28, MenuStyle.TextMuted, TextAnchor.UpperLeft, outline: false);
             hintText.horizontalOverflow = HorizontalWrapMode.Wrap;
 
             Label(box, "Games nearby", 760f, -250f, 600f);
             for (int i = 0; i < ListRows; i++)
             {
                 int index = i;
-                _matchButtons[i] = UiFactory.Button(box, "", new Vector2(0f, 1f), new Vector2(1180f, -340f - i * 104f), new Vector2(820f, 92f), MenuTheme.ButtonBlue, () => JoinListed(index));
-                _matchLabels[i] = _matchButtons[i].GetComponentInChildren<Text>();
+                _matchButtons[i] = MenuStyle.Make(box, " ", MenuIcon.Next, MenuStyle.Kind.Secondary, new Vector2(0f, 1f), new Vector2(1180f, -340f - i * 104f), new Vector2(820f, 92f), () => JoinListed(index));
+                _matchLabels[i] = _matchButtons[i].Label;
                 _matchLabels[i].fontSize = 32;
             }
             _emptyList = UiFactory.Text(UiFactory.Rect("Empty", box, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(770f, -320f), new Vector2(820f, 120f)),
-                "Looking for games...", 30, new Color(1f, 1f, 1f, 0.6f), TextAnchor.UpperLeft);
+                "Looking for games...", 30, MenuStyle.TextMuted, TextAnchor.UpperLeft, outline: false);
 
             Label(box, "Or join by IP", 60f, -640f, 400f);
             _address = UiInput.Create(box, new Vector2(0f, 1f), new Vector2(330f, -730f), new Vector2(540f, 76f), "e.g. 192.168.1.20", "", maxLength: 40);
-            UiFactory.Button(box, "Join", new Vector2(0f, 1f), new Vector2(720f, -730f), new Vector2(200f, 76f), MenuTheme.ButtonBlue, JoinByAddress);
+            MenuStyle.Make(box, "Join", null, MenuStyle.Kind.Secondary, new Vector2(0f, 1f), new Vector2(720f, -730f), new Vector2(200f, 76f), JoinByAddress);
 
             _browseStatus = UiFactory.Text(UiFactory.Rect("Status", box, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(1500f, 50f)),
-                "", 30, new Color(1f, 0.6f, 0.4f));
-            UiFactory.Button(box, "Back", new Vector2(0f, 0f), new Vector2(240f, 80f), new Vector2(320f, 100f), MenuTheme.ButtonGrey, () => { Hide(); _back(); });
+                "", 30, MenuStyle.Gold, TextAnchor.MiddleCenter, outline: false);
+            MenuStyle.BackButton(box, "Back", () => { Hide(); _back(); });
 
             // ---------------- Lobby ----------------
             _lobby = UiFactory.Stretch("Lobby", canvas);
-            UiFactory.Image(_lobby, new Color(0f, 0f, 0f, 0.35f));
             var lb = Box(_lobby, "");
             _lobbyTitle = lb.Find("Title").GetComponent<Text>();
-            _lobbyHint = UiFactory.Text(UiFactory.Rect("Hint", lb, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -100f), new Vector2(1500f, 44f)),
-                "", 28, new Color(1f, 1f, 1f, 0.7f));
+            _lobbyHint = UiFactory.Text(UiFactory.Rect("Hint", lb, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -140f), new Vector2(1500f, 36f)),
+                "", 26, MenuStyle.TextMuted, TextAnchor.MiddleCenter, outline: false);
 
-            for (int i = 0; i < _seats.Length; i++) _seats[i] = new SeatRow(this, lb, i, -170f - i * 150f);
+            for (int i = 0; i < _seats.Length; i++) _seats[i] = new SeatRow(this, lb, i, -178f - i * 146f);
 
-            Label(lb, "Your driver", 900f, -160f, 400f);
+            Label(lb, "Your driver", 900f, -170f, 400f);
             for (int c = 0; c < Characters.Count; c++)
             {
                 int character = c;
-                var slot = UiFactory.Rect(Characters.Names[c], lb, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(900f + c * 160f, -210f), new Vector2(140f, 140f));
-                _characterRings[c] = UiFactory.Image(slot, Color.gray, ProceduralTextures.Circle());
+                var slot = UiFactory.Rect(Characters.Names[c], lb, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(900f + c * 160f, -220f), new Vector2(140f, 140f));
+                _characterRings[c] = MenuStyle.PortraitFrame(slot, _portraits[c], MenuStyle.RingColor(false), out _);
+                _characterRings[c].raycastTarget = true; // the whole slot is the button
                 var button = slot.gameObject.AddComponent<Button>();
                 button.targetGraphic = _characterRings[c];
                 button.onClick.AddListener(() => PickCharacter(character));
-                Portrait(slot, c, 122f);
             }
 
-            float x = 900f, top = -390f, step = 76f;
+            float x = 900f, top = -400f, step = 76f;
             _modeRow = new OptionRow(lb, "Mode", x, top, () => Settings.Mode == GameMode.Timed ? "Timed" : "Elimination",
                 d => EditSettings(s => s.Mode = s.Mode == GameMode.Timed ? GameMode.Elimination : GameMode.Timed));
             _lengthRow = new OptionRow(lb, "Match length", x, top - step, () => $"{Settings.DurationSeconds / 60f:0} min",
@@ -114,14 +112,14 @@ namespace BOW.Game
                 d => EditSettings(s => s.BallCount = Wrap(s.BallCount + d, MatchSettings.MinBalls, MatchSettings.MaxBalls)));
 
             _lobbyStatus = UiFactory.Text(UiFactory.Rect("Status", lb, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-460f, 60f), new Vector2(700f, 100f)),
-                "", 28, new Color(1f, 1f, 1f, 0.75f), TextAnchor.MiddleRight);
+                "", 28, MenuStyle.TextMuted, TextAnchor.MiddleRight, outline: false);
             _notice = UiFactory.Text(UiFactory.Rect("Notice", lb, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 170f), new Vector2(1500f, 44f)),
-                "", 30, MenuTheme.Cyan);
-            UiFactory.Button(lb, "Leave", new Vector2(0f, 0f), new Vector2(240f, 80f), new Vector2(320f, 100f), MenuTheme.ButtonGrey, Leave);
-            _start = UiFactory.Button(lb, "START", new Vector2(1f, 0f), new Vector2(-230f, 80f), new Vector2(360f, 110f), MenuTheme.ButtonGreen, () => NetSession.Host?.StartMatch());
-            _ready = UiFactory.Button(lb, "Ready", new Vector2(1f, 0f), new Vector2(-230f, 80f), new Vector2(360f, 110f), MenuTheme.ButtonGreen,
+                "", 30, MenuStyle.Cyan, TextAnchor.MiddleCenter, outline: false);
+            MenuStyle.BackButton(lb, "Leave", Leave);
+            _start = MenuStyle.Make(lb, "START", MenuIcon.Play, MenuStyle.Kind.Primary, new Vector2(1f, 0f), new Vector2(-230f, 82f), new Vector2(380f, 108f), () => NetSession.Host?.StartMatch());
+            _ready = MenuStyle.Make(lb, "Ready", MenuIcon.Play, MenuStyle.Kind.Primary, new Vector2(1f, 0f), new Vector2(-230f, 82f), new Vector2(380f, 108f),
                 () => NetSession.Guest?.SetReady(!NetSession.Guest.IsReady));
-            _readyLabel = _ready.GetComponentInChildren<Text>();
+            _readyLabel = _ready.Label;
 
             NetSession.Notice += ShowNotice;
             Hide();
@@ -263,7 +261,7 @@ namespace BOW.Game
                 var b = _shown[i].Beacon;
                 string mode = b.Mode == GameMode.Elimination ? "Elimination" : "Timed";
                 _matchLabels[i].text = $"{b.MatchName}   {mode}   {b.Status}";
-                _matchButtons[i].interactable = b.Joinable;
+                _matchButtons[i].Interactable = b.Joinable;
             }
             _emptyList.gameObject.SetActive(_shown.Count == 0);
         }
@@ -327,7 +325,7 @@ namespace BOW.Game
 
             int myCharacter = mySeat >= 0 ? lobby.Seats[mySeat].Character : 0;
             for (int c = 0; c < Characters.Count; c++)
-                _characterRings[c].color = c == myCharacter ? MenuTheme.Cyan : new Color(0.25f, 0.28f, 0.35f);
+                _characterRings[c].color = MenuStyle.RingColor(c == myCharacter);
 
             bool timed = lobby.Settings.Mode == GameMode.Timed;
             _lengthRow.SetVisible(timed);
@@ -346,14 +344,14 @@ namespace BOW.Game
                 string blocker = EntitlementStore.Current.CanHost(lobby.Settings.Mode)
                     ? host.StartBlocker()
                     : "Elimination needs the Modes unlock (see Store).";
-                _start.interactable = blocker == null;
+                _start.Interactable = blocker == null;
                 _lobbyStatus.text = blocker ?? "Everyone's ready!";
             }
             else
             {
                 bool ready = guest.IsReady;
                 _readyLabel.text = ready ? "Not ready" : "Ready";
-                _ready.image.color = ready ? MenuTheme.ButtonGrey : MenuTheme.ButtonGreen;
+                _ready.SetAccent(ready ? MenuStyle.Kind.Quiet : MenuStyle.Kind.Primary);
                 _lobbyStatus.text = ready ? "Waiting for the host to start..." : "Tap Ready when you're set.";
             }
         }
@@ -362,26 +360,16 @@ namespace BOW.Game
 
         private static RectTransform Box(Transform parent, string title)
         {
-            var box = UiFactory.Rect("Box", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1640f, 960f));
-            UiFactory.Image(box, MenuTheme.Panel);
-            var t = UiFactory.Text(UiFactory.Rect("Title", box, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -20f), new Vector2(1400f, 90f)),
-                title, 64, MenuTheme.Cyan);
-            t.name = "Title";
-            return box;
+            return MenuStyle.ScreenBox((RectTransform)parent, title, out _);
         }
 
         private static void Label(Transform parent, string text, float x, float y, float width)
-            => UiFactory.Text(UiFactory.Rect(text, parent, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, y), new Vector2(width, 50f)),
-                text, 34, Color.white, TextAnchor.MiddleLeft);
+            => MenuStyle.FieldLabel(UiFactory.Rect(text, parent, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(x, y), new Vector2(width, 50f)),
+                text, 34);
 
-        private RawImage Portrait(Transform parent, int character, float size)
+        private RawImage Portrait(RectTransform slot, int character)
         {
-            var mask = UiFactory.Rect("Mask", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size, size));
-            UiFactory.Image(mask, Color.white, ProceduralTextures.Circle()).raycastTarget = false;
-            mask.gameObject.AddComponent<Mask>().showMaskGraphic = false;
-            var portrait = UiFactory.Stretch("Portrait", mask).gameObject.AddComponent<RawImage>();
-            portrait.texture = _portraits[character];
-            portrait.raycastTarget = false;
+            MenuStyle.PortraitFrame(slot, _portraits[character], MenuStyle.RingColor(false), out var portrait);
             return portrait;
         }
 
@@ -402,7 +390,7 @@ namespace BOW.Game
             private readonly RectTransform _root;
             private readonly RawImage _portrait;
             private readonly Text _name, _status;
-            private readonly Button _change, _easier, _harder;
+            private readonly MenuButton _change, _easier, _harder;
             private readonly Text _changeLabel;
 
             public SeatRow(LanMenu menu, Transform parent, int seat, float y)
@@ -410,20 +398,21 @@ namespace BOW.Game
                 _menu = menu;
                 _seat = seat;
                 _root = UiFactory.Rect($"Seat {seat}", parent, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(60f, y), new Vector2(800f, 134f));
-                UiFactory.Image(_root, new Color(0.08f, 0.1f, 0.15f, 0.9f));
-                var stripe = UiFactory.Rect("Colour", _root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(14f, 134f));
-                UiFactory.Image(stripe, SimSpace.SeatColors[seat]);
+                MenuStyle.Recess(_root, new Color(0.03f, 0.05f, 0.1f, 0.9f), 1.2f);
+                MenuStyle.Outline(_root, new Color(0.35f, 0.5f, 0.68f, 0.35f), 1.2f);
+                var stripe = UiFactory.Rect("Colour", _root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(10f, 0f), new Vector2(10f, 104f));
+                MenuStyle.Recess(stripe, SimSpace.SeatColors[seat], 6f).raycastTarget = false;
                 var slot = UiFactory.Rect("Portrait", _root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(30f, 0f), new Vector2(110f, 110f));
-                _portrait = menu.Portrait(slot, 0, 110f);
+                _portrait = menu.Portrait(slot, 0);
                 _name = UiFactory.Text(UiFactory.Rect("Name", _root, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(160f, -14f), new Vector2(380f, 50f)),
                     "", 36, Color.white, TextAnchor.MiddleLeft);
                 _status = UiFactory.Text(UiFactory.Rect("Status", _root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(160f, 14f), new Vector2(380f, 44f)),
-                    "", 28, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleLeft);
-                _change = UiFactory.Button(_root, "Change", new Vector2(1f, 0.5f), new Vector2(-110f, 22f), new Vector2(190f, 64f), MenuTheme.ButtonBlue,
+                    "", 28, MenuStyle.TextMuted, TextAnchor.MiddleLeft, outline: false);
+                _change = MenuStyle.Make(_root, "Change", null, MenuStyle.Kind.Secondary, new Vector2(1f, 0.5f), new Vector2(-114f, 24f), new Vector2(196f, 62f),
                     () => NetSession.Host?.CycleSeat(_seat));
-                _changeLabel = _change.GetComponentInChildren<Text>();
-                _easier = UiFactory.Button(_root, "-", new Vector2(1f, 0.5f), new Vector2(-170f, -36f), new Vector2(70f, 46f), MenuTheme.ButtonGrey, () => StepDifficulty(-1));
-                _harder = UiFactory.Button(_root, "+", new Vector2(1f, 0.5f), new Vector2(-50f, -36f), new Vector2(70f, 46f), MenuTheme.ButtonGrey, () => StepDifficulty(1));
+                _changeLabel = _change.Label;
+                _easier = MenuStyle.Make(_root, "", MenuIcon.Back, MenuStyle.Kind.Quiet, new Vector2(1f, 0.5f), new Vector2(-170f, -36f), new Vector2(76f, 48f), () => StepDifficulty(-1));
+                _harder = MenuStyle.Make(_root, "", MenuIcon.Next, MenuStyle.Kind.Quiet, new Vector2(1f, 0.5f), new Vector2(-56f, -36f), new Vector2(76f, 48f), () => StepDifficulty(1));
             }
 
             private void StepDifficulty(int delta)

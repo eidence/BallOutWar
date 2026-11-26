@@ -10,7 +10,7 @@ namespace BOW.Game
     /// </summary>
     public sealed class PortraitStudio
     {
-        private const int Resolution = 256;
+        private const int Resolution = 512;
         private static readonly Vector3 Origin = new Vector3(5000f, 0f, 0f);
 
         private readonly Camera[] _cameras = new Camera[Characters.Count];
@@ -24,6 +24,13 @@ namespace BOW.Game
 
         /// <summary>How far to move each character right in their ring, as a fraction of the framed size. Positive = right.</summary>
         private static readonly float[] PortraitShiftRight = { 0f, 0.08f, 0f, 0f };
+
+        /// <summary>
+        /// How much closer to frame each character than the shared chest-up framing. Bolt's antenna makes his framed
+        /// region tall, which shrinks the rest of him; 1.25 brings his body up to the others' size with the antenna
+        /// still inside the ring.
+        /// </summary>
+        private static readonly float[] PortraitZoom = { 1.25f, 1f, 1f, 1f };
 
         public RenderTexture[] Portraits { get; } = new RenderTexture[Characters.Count];
 
@@ -69,8 +76,8 @@ namespace BOW.Game
             {
                 if (!CharacterModels.PortraitFocus(critters[c], out var centre, out float size)) continue;
                 centre.y -= PortraitRaise[c] * size; // aim lower, so the head rises in the ring
-                FrameOnModel(_cameras[c], spots[c], centre, size);
-                _cameras[c].transform.position -= _cameras[c].transform.right * (PortraitShiftRight[c] * size); // camera left = character right
+                FrameOnModel(_cameras[c], spots[c], centre, size / PortraitZoom[c]);
+                _cameras[c].transform.position -= _cameras[c].transform.right * (PortraitShiftRight[c] * size / PortraitZoom[c]); // camera left = character right
             }
         }
 
